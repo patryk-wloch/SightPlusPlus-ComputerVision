@@ -78,7 +78,7 @@ int ServiceController::main() try {
 		while (output_stream_controller_.should_receive_new_frames()) {
 
 			if (processed_frames.poll_for_frame(&curr_frame)) {
-
+				if (mats.size() > 6) continue;
 					auto color_matrix = frame_to_mat(curr_frame.get_color_frame());
 					auto depth_matrix = depth_frame_to_meters(curr_frame.get_depth_frame());
 					color_matrix = color_matrix(crop);
@@ -100,11 +100,11 @@ int ServiceController::main() try {
 			if (mats.size() > 3) {
 				auto now = clock();
 				auto time_diff = (now - std::get<2>(mats.front())) / (CLOCKS_PER_SEC / 1000);
-				if (time_diff > 300) {
+				/*if (time_diff > 300) {
 					mats.pop();
 					SPDLOG_INFO("POPPED");
 					continue;
-				 }
+				 }*/
 
 		
 
@@ -127,20 +127,13 @@ int ServiceController::main() try {
 						// Draw bounding box
 						cv::rectangle(curr_color_matrix, cv::Point2f(results.at(objectIndex).xmin, results.at(objectIndex).ymin), cv::Point2f(results.at(objectIndex).xmax, results.at(objectIndex).ymax), cv::Scalar(0, 255, 0, 255), 1);
 					}
-					if (counter == 10) cv::imwrite("mama1.png", curr_color_matrix);
-					if (counter == 20) cv::imwrite("mama2.png", curr_color_matrix);
-					if (counter == 30) cv::imwrite("mama3.png", curr_color_matrix);
-					if (counter == 40) cv::imwrite("mama4.png", curr_color_matrix);
-					if (counter == 50) cv::imwrite("mama5.png", curr_color_matrix);
-					if (counter == 60) cv::imwrite("mama6.png", curr_color_matrix);
-					if (counter == 70) cv::imwrite("mama7.png", curr_color_matrix);
+
 					// Show the image in the window
 					//cv::imshow("DEPTH", depth_matrix);
 			/*		if (counter == 100) {
 						return 0;
 					}*/
-					cv::ims
-						how("realsense", curr_color_matrix);
+					cv::imshow("realsense", curr_color_matrix);
 					cv::waitKey(1);
 					SPDLOG_INFO("{}", mats.size());
 					mats.pop();
