@@ -78,7 +78,7 @@ int ServiceController::main() try {
 		while (output_stream_controller_.should_receive_new_frames()) {
 
 			if (processed_frames.poll_for_frame(&curr_frame)) {
-				if (mats.size() > 6) continue;
+				if (mats.size() > 3) continue;
 					auto color_matrix = frame_to_mat(curr_frame.get_color_frame());
 					auto depth_matrix = depth_frame_to_meters(curr_frame.get_depth_frame());
 					color_matrix = color_matrix(crop);
@@ -96,8 +96,8 @@ int ServiceController::main() try {
 
 	while (output_stream_controller_.should_receive_new_frames()) {
 		try {
-
-			if (mats.size() > 3) {
+			if (mats.empty()) continue;
+			if ((*std::get<0>(mats.front())).total() == 960*720)  {
 				auto now = clock();
 				auto time_diff = (now - std::get<2>(mats.front())) / (CLOCKS_PER_SEC / 1000);
 				/*if (time_diff > 300) {
