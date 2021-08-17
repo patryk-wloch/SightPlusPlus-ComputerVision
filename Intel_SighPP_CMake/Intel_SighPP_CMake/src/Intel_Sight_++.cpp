@@ -62,8 +62,8 @@ int main(int argc, char** argv)
 			if (next_arg.compare("realsense") == 0)
 			{
 				SPDLOG_INFO("Streaming from camera");
-				cfg.enable_stream(RS2_STREAM_DEPTH, 848, 480, RS2_FORMAT_Z16, 15);
-				cfg.enable_stream(RS2_STREAM_COLOR, 1280, 720, RS2_FORMAT_BGR8, 15);
+				cfg.enable_stream(RS2_STREAM_DEPTH, 848, 480, RS2_FORMAT_Z16, 30);
+				cfg.enable_stream(RS2_STREAM_COLOR, 1280, 720, RS2_FORMAT_BGR8, 30);
 				continue;
 			}
 
@@ -207,8 +207,9 @@ int main(int argc, char** argv)
 	//ApiWebSocketImpl websocket_api_user(port, Priority::HIGH);
 	//api.add_user(websocket_api_user);
 
-	SPDLOG_INFO("Setting up Output Stream Windows");
+	
 	OutputStreamController output_stream_controller(stream_depth, stream_color);
+	SPDLOG_INFO("Setting up Output Stream Windows");
 
 	ServiceController service(pipe, inference_controller, api, output_stream_controller, profile);
 	service.main();

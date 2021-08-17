@@ -28,8 +28,12 @@ ServiceController::ServiceController(
 {}
 
 int ServiceController::main() try {
+	int process_frame_counter = 0;
+	int translate_frame_counter = 0;
+	int infer_frame_counter = 0;
+	SPDLOG_INFO("Instantiated Service Controller");
 	std::mutex lock;
-	std::queue< std::tuple<std::unique_ptr<cv::Mat>, std::unique_ptr<cv::Mat>, clock_t>> mats;
+	std::queue< std::pair<std::unique_ptr<cv::Mat>, std::unique_ptr<cv::Mat>>> mats;
 	int counter = 0;
 	rs2::decimation_filter dec_filter;
 	rs2::spatial_filter spat_filter;
@@ -46,7 +50,7 @@ int ServiceController::main() try {
 
 	//Frame processing thread
 	std::thread video_thread([&]() {
-
+		
 		while (output_stream_controller_.should_receive_new_frames()) {
 			rs2::frameset data;
 
@@ -65,7 +69,8 @@ int ServiceController::main() try {
 				rs2::frameset aligned = align_to.process(processed);
 
 				processed_frames.enqueue(aligned);
-				SPDLOG_INFO("Enqueued a frame");
+				process_frame_counter++;
+				SPDLOG_INFO("Enqueued a frame {}", process_frame_counter);
 			}
 		}
 		});
@@ -78,55 +83,56 @@ int ServiceController::main() try {
 		while (output_stream_controller_.should_receive_new_frames()) {
 
 			if (processed_frames.poll_for_frame(&curr_frame)) {
-				if (mats.size() > 3) continue;
+				if (mats.size() > 3) {
+					SPDLOG_INFO("SKIPPED"); continue;
+				}
 					auto color_matrix = frame_to_mat(curr_frame.get_color_frame());
 					auto depth_matrix = depth_frame_to_meters(curr_frame.get_depth_frame());
 					color_matrix = color_matrix(crop);
 					depth_matrix = depth_matrix(crop);
-					auto now = clock();
-					mats.push(std::tuple<std::unique_ptr<cv::Mat>, std::unique_ptr<cv::Mat>, clock_t> { std::make_unique<cv::Mat>(color_matrix), std::make_unique<cv::Mat>(depth_matrix), now});
-
-					SPDLOG_INFO("Translated a frame");
+					mats.push(std::pair<std::unique_ptr<cv::Mat>, std::unique_ptr<cv::Mat>> { std::make_unique<cv::Mat>(color_matrix), std::make_unique<cv::Mat>(depth_matrix)});
+					translate_frame_counter++;
+					SPDLOG_INFO("Translated a frame {}", translate_frame_counter);
 		
 			}
 
 		}
 		});
 
-
+	bool skipper = false;
+	auto& results = inference_controller_.results_;
 	while (output_stream_controller_.should_receive_new_frames()) {
+		
 		try {
 			if (mats.empty()) continue;
-			if ((*std::get<0>(mats.front())).total() == 960*720)  {
-				auto now = clock();
-				auto time_diff = (now - std::get<2>(mats.front())) / (CLOCKS_PER_SEC / 1000);
-				/*if (time_diff > 300) {
-					mats.pop();
-					SPDLOG_INFO("POPPED");
-					continue;
-				 }*/
-
+			if ((*(mats.front().first)).total() == 960*720)  {
 		
 
-					cv::Mat curr_color_matrix = *std::get<0>(mats.front());
-					cv::Mat curr_depth_matrix = *std::get<1>(mats.front());
+				cv::Mat curr_color_matrix = *(mats.front().first);
 
-					if (curr_color_matrix.empty() || curr_depth_matrix.empty()) continue;
+				cv::Mat curr_depth_matrix = *(mats.front().second);
+
 
 					SPDLOG_INFO("Conversion and cropping complete");
 
-					auto results = inference_controller_.process_frames(curr_color_matrix, curr_depth_matrix);
+
+					if (!skipper) {
+						inference_controller_.process_frames(curr_color_matrix, curr_depth_matrix);
+					}
 
 
 
 					for (unsigned int objectIndex = 0; objectIndex < results.size(); objectIndex++)
 					{
 						// Display label and distance text on the bounding box
-						std::string textToDisplay = cv::format("%d", results.at(objectIndex).label);
+						std::string textToDisplay = cv::format("%d, %f m", results.at(objectIndex).label, results.at(objectIndex).distance);
 						cv::putText(curr_color_matrix, textToDisplay, cv::Point2f(results.at(objectIndex).xmin, results.at(objectIndex).ymin), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(0, 255, 0, 255), 2);
 						// Draw bounding box
 						cv::rectangle(curr_color_matrix, cv::Point2f(results.at(objectIndex).xmin, results.at(objectIndex).ymin), cv::Point2f(results.at(objectIndex).xmax, results.at(objectIndex).ymax), cv::Scalar(0, 255, 0, 255), 1);
 					}
+
+					infer_frame_counter++;
+					SPDLOG_INFO("Inferred a frame {}", infer_frame_counter);
 
 					// Show the image in the window
 					//cv::imshow("DEPTH", depth_matrix);
@@ -135,7 +141,7 @@ int ServiceController::main() try {
 					}*/
 					cv::imshow("realsense", curr_color_matrix);
 					cv::waitKey(1);
-					SPDLOG_INFO("{}", mats.size());
+					skipper = !skipper;
 					mats.pop();
 
 

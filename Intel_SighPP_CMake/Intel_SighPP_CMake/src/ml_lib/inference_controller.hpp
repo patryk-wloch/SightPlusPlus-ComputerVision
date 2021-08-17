@@ -15,6 +15,7 @@
 #include "../setup_helper.hpp"
 #include <inference_engine.hpp>
 #include <tbb/concurrent_vector.h>
+#include <ngraph/ngraph.hpp>
 
 /// <summary>
 /// This class is designed as the object to control all object recognition networks and define corresponding functions 
@@ -45,13 +46,15 @@ class InferenceController {
 	unsigned int object_size;
 
 	InferenceEngine::MemoryBlob::Ptr input_buffer;
+	InferenceEngine::MemoryBlob::Ptr input_info_buffer;
 	InferenceEngine::MemoryBlob::Ptr output_buffer;
 
 	InferenceEngine::InferRequest infer_request;
 	InferenceEngine::ExecutableNetwork exec_network_main;
-	std::vector<DetectionResult> results_;
 
+	InferenceEngine::InputsDataMap input_info;
 	std::string input_layer;
+	std::string input_info_layer;
 	std::string output_layer;
 
 public:
@@ -61,7 +64,9 @@ public:
 		path_to_model_ = path_to_model;
 		config_ = config;
 
+
 	}
+	std::vector<DetectionResult> results_;
 	bool start() {
 		try {
 			//Initialise OpenVINO Inference Engine
@@ -78,11 +83,23 @@ public:
 			network_main = core.ReadNetwork(path_to_model_);
 
 			//Get basic info about the network's input
-			InferenceEngine::InputsDataMap input_info = network_main.getInputsInfo();
-			auto input_data = input_info.begin()->second;
-			//Set input precision - unsigned 8-bit is chosen as it's compatible with all different architectures
-			input_data->setPrecision(InferenceEngine::Precision::U8);
-			input_layer = input_info.begin()->first;
+			input_info = network_main.getInputsInfo();
+
+			for (auto& item : input_info) {
+				if (item.second->getInputData()->getTensorDesc().getDims().size() == 4) {
+					input_layer = item.first;
+					auto input_data = item.second;
+
+					//Set input precision - unsigned 8-bit is chosen as it's compatible with all different architectures
+					input_data->setPrecision(InferenceEngine::Precision::U8);
+
+				}
+				else if (item.second->getInputData()->getTensorDesc().getDims().size() == 2) {
+					input_info_layer = item.first;
+
+					item.second->setPrecision(InferenceEngine::Precision::FP32);
+				}
+			}
 
 			//Get basic info about the network's output
 			InferenceEngine::OutputsDataMap output_info = network_main.getOutputsInfo();
@@ -91,18 +108,29 @@ public:
 			output_data->setPrecision(InferenceEngine::Precision::FP32);
 			output_layer = output_info.begin()->first;
 
+			if (auto ngraph_function = network_main.getFunction()) {
+				for (const auto& out : output_info) {
+					for (const auto& op : ngraph_function->get_ops()) {
+						if (op->get_type_info() == ngraph::op::DetectionOutput::type_info && op->get_friendly_name() == out.second->getName()) {
+							output_layer = out.first;
+							output_data = out.second;
+						}
+					}
+				}
+			}
 			//Create Executable Network instance and load the specified CNN Network
 		
 			exec_network_main = core.LoadNetwork(network_main, config_);
 
 			SPDLOG_INFO("Loaded network into Inference Engine");
 
-			//Create Inference Request instance;
+			//Create test Inference Request instance;
 			InferenceEngine::InferRequest infer_request = exec_network_main.CreateInferRequest();
 			
 			//Get information about the inference request input and output
 			auto input_dimensions = infer_request.GetBlob(input_layer)->getTensorDesc().getDims();
 			auto output_dimensions = infer_request.GetBlob(output_layer)->getTensorDesc().getDims();
+
 
 			channels_count = input_dimensions.at(1);
 			input_height = input_dimensions.at(2);
@@ -110,6 +138,8 @@ public:
 
 			max_proposals = output_dimensions.at(2);
 			object_size = output_dimensions.at(3);
+
+			SPDLOG_INFO("{}, {}, {}, {}, {}",channels_count, input_height, input_width, max_proposals, object_size);
 
 			//Prepare input BLOB and corresponding buffer space in memory
 		
@@ -121,9 +151,14 @@ public:
 			SPDLOG_ERROR(e.what());
 		}
 	}
-	std::vector<DetectionResult>& process_frames(cv::Mat& color_matrix, cv::Mat& depth_matrix) {
+
+	void process_frames(const cv::Mat& color_matrix, const cv::Mat& depth_matrix) {
+
 		try {
+			//Clear detections vector
 			results_.clear();
+
+			//Resize input matrix to match network specification
 			cv::Mat img_input;
 			cv::resize(color_matrix, img_input, cv::Size(input_height, input_width));
 			size_t image_size = (size_t)input_height * (size_t)input_width;
@@ -148,8 +183,28 @@ public:
 				}
 			}
 
+
+			if (input_info_layer != "") {
+				const auto input_info_blob = infer_request.GetBlob(input_info_layer);
+				input_info_buffer = InferenceEngine::as<InferenceEngine::MemoryBlob>(input_info_blob);
+
+				auto input_info_dimensions = input_info_blob->getTensorDesc().getDims().at(1);
+				auto input_info_access_holder = input_info_buffer->wmap();
+				float* data_info = input_info_access_holder.as<InferenceEngine::PrecisionTrait<InferenceEngine::Precision::FP32>::value_type*>();
+
+				data_info[input_info_dimensions + 0] = static_cast<float>(input_info[input_layer]->getTensorDesc().getDims()[2]);
+				data_info[input_info_dimensions + 1] = static_cast<float>(input_info[input_layer]->getTensorDesc().getDims()[3]);
+
+				for (unsigned int k = 2; k < input_info_dimensions; k++) {
+					data_info[input_info_dimensions + k] = 1.0f;
+				}
+
+
+			}
+
+
 			infer_request.Infer();
-			SPDLOG_INFO("Inferred a frame");
+
 
 			auto output_access_holder = output_buffer->rmap();
 			const float* detections = output_access_holder.as<InferenceEngine::PrecisionTrait<InferenceEngine::Precision::FP32>::value_type*>();
@@ -165,26 +220,42 @@ public:
 				int ymin = (int)(0.95 * detections[detection_index * object_size + 4] * 720);
 				int xmax = (int)(1.05 * detections[detection_index * object_size + 5] * 960);
 				int ymax = (int)(1.05 * detections[detection_index * object_size + 6] * 720);
+				if (confidence > 0.5 && object_label == 1) {
 
-				if (confidence > 0.55 && object_label == 1) {
+
 					xmin = std::max(0, xmin);
+
 					ymin = std::max(0, ymin);
 					xmax = std::min(960, xmax);
 					ymax = std::min(720, ymax);
 
-					DetectionResult current_detection = { xmin, ymin, xmax, ymax, object_label };
+					cv::Rect object(xmin, ymin, xmax - xmin, ymax - ymin);
+					cv::Mat object_depth = depth_matrix(object);
+
+					double distance = get_distance(object_depth);
+						
+					DetectionResult current_detection = { xmin, ymin, xmax, ymax, object_label, distance };
 					results_.push_back(current_detection);
-					
+
 				}
 
 			}
 
-			return results_;
 		}
 		catch (const std::exception& e) {
 			SPDLOG_ERROR(e.what());
 		}
 	}
+		double get_distance(cv::Mat & object) {
+			if (!object.isContinuous()) object = object.clone();
+			object = object.reshape(0, 1);
+			cv::Mat label, centers;
+			cv::kmeans(object, 2, label, cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 50, 0.1), 1, cv::KMEANS_RANDOM_CENTERS, centers);
+			double distance = centers.at<float>(0) > centers.at<float>(1) ? centers.at<float>(1) : centers.at<float>(0);
+			return distance;
+
+	}
+	};
 
 	/// <summary>
 	/// Get all objects with their classes, distance and corresponding realtive locations within the frame
@@ -207,12 +278,7 @@ public:
 	/// </summary>
 	/// <param name="color_matrix">color matrix obtained from the camera</param>
  	/// <param name="depth_matrix">depth matrix obtained from the camera</param>
-	void new_frames(cv::Mat color_matrix, cv::Mat depth_matrix) {
 
-
-		SPDLOG_INFO("Doing ML work with new frames");
-		
-	}
 
 
 	/// <summary>
@@ -220,11 +286,9 @@ public:
 	/// </summary>
 	/// <returns>the number of object recognition models added so far</returns>
 
-};
-
 
 //SPDLOG_INFO("STARTING KMEANS");
-			//cv::Mat object_depth = depth_matrix(object);
+
 			////cv::imshow("depth_matrix", object_depth);
 			////std::string empty = "";
 			////std::cin >> empty;
@@ -234,7 +298,7 @@ public:
 			//			}*/
 			//cv::Mat color_mask(object_depth.rows, object_depth.cols, CV_8UC3, cv::Scalar(255, 0, 255));
 			//object_depth = object_depth.reshape(0, 1);
-			//cv::Mat label, centers;
+
 			//cv::kmeans(object_depth, 2, label, cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 100, 0.01), 1, cv::KMEANS_RANDOM_CENTERS, centers);
 			//cv::Mat mask = label.reshape(0, depth_matrix(object).rows);
 			//mask.convertTo(mask, CV_8U);

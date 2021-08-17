@@ -48,7 +48,7 @@ static cv::Mat frame_to_mat(const rs2::frame& f)
 static cv::Mat depth_frame_to_meters( const rs2::depth_frame & f )
 {
     cv::Mat dm = frame_to_mat(f);
-    dm.convertTo( dm, CV_64F );
+    dm.convertTo( dm, CV_32F );
     dm = dm * f.get_units();
     return dm;
 }
