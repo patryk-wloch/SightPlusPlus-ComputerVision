@@ -16,6 +16,7 @@
 #include <inference_engine.hpp>
 #include <tbb/concurrent_vector.h>
 #include <ngraph/ngraph.hpp>
+#include <opencv2/tracking/tracker.hpp>
 
 /// <summary>
 /// This class is designed as the object to control all object recognition networks and define corresponding functions 
@@ -32,10 +33,13 @@ float xmax = 0.0;      // coordinate of bounding box
 float ymax = 0.0;      // coordinate of bounding box
 int label = 0;
 double distance = 0;
-
+int id = 0;
+cv::Rect2d bounding_box;
 };
 
 class InferenceController {
+
+
 	std::string path_to_model_ = "models/ssd_mobilenet_v2_coco.xml";
 	std::string config_ = "MULTI";
 	unsigned int channels_count;
@@ -57,6 +61,8 @@ class InferenceController {
 	std::string input_info_layer;
 	std::string output_layer;
 
+
+
 public:
 	InferenceController() { };
 	InferenceController(std::string& path_to_model, std::string& config) {
@@ -66,12 +72,41 @@ public:
 
 
 	}
-	std::vector<DetectionResult> results_;
+	std::vector<std::pair<cv::Ptr<cv::Tracker>, DetectionResult>> results_;
+	std::queue<int> free_ids;
 	bool start() {
 		try {
 			//Initialise OpenVINO Inference Engine
 			InferenceEngine::Core core;
-
+			free_ids.push(1);
+			free_ids.push(2);
+			free_ids.push(3);
+			free_ids.push(4);
+			free_ids.push(5);
+			free_ids.push(6);
+			free_ids.push(7);
+			free_ids.push(8);
+			free_ids.push(9);
+			free_ids.push(10);
+			free_ids.push(11);
+			free_ids.push(12);
+			free_ids.push(13);
+			free_ids.push(14);
+			free_ids.push(15);
+			free_ids.push(16);
+			free_ids.push(17);
+			free_ids.push(18);
+			free_ids.push(19);
+			free_ids.push(20);
+			free_ids.push(21);
+			free_ids.push(22);
+			free_ids.push(23);
+			free_ids.push(24);
+			free_ids.push(25); 
+			free_ids.push(26);
+			free_ids.push(27);
+			free_ids.push(28);
+			free_ids.push(29);
 
 			if (config_ == "MULTI") {
 				core.SetConfig({ {"MULTI_DEVICE_PRIORITIES","GPU,CPU"} }, "MULTI");
@@ -156,7 +191,6 @@ public:
 
 		try {
 			//Clear detections vector
-			results_.clear();
 
 			//Resize input matrix to match network specification
 			cv::Mat img_input;
@@ -209,6 +243,10 @@ public:
 			auto output_access_holder = output_buffer->rmap();
 			const float* detections = output_access_holder.as<InferenceEngine::PrecisionTrait<InferenceEngine::Precision::FP32>::value_type*>();
 
+
+
+			std::vector<std::pair<cv::Ptr<cv::Tracker>, DetectionResult>> new_results;
+
 			for (unsigned int detection_index = 0; detection_index < max_proposals; detection_index++) {
 				float image_id = detections[detection_index * object_size + 0];
 
@@ -216,10 +254,11 @@ public:
 
 				int object_label = detections[detection_index * object_size + 1];
 				float confidence = detections[detection_index * object_size + 2];
-				int xmin = (int)(0.95 * detections[detection_index * object_size + 3] * 960);
-				int ymin = (int)(0.95 * detections[detection_index * object_size + 4] * 720);
-				int xmax = (int)(1.05 * detections[detection_index * object_size + 5] * 960);
-				int ymax = (int)(1.05 * detections[detection_index * object_size + 6] * 720);
+				int xmin = (int)(detections[detection_index * object_size + 3] * 960);
+				int ymin = (int)(detections[detection_index * object_size + 4] * 720);
+				int xmax = (int)(detections[detection_index * object_size + 5] * 960);
+				int ymax = (int)(detections[detection_index * object_size + 6] * 720);
+
 				if (confidence > 0.5 && object_label == 1) {
 
 
@@ -229,16 +268,43 @@ public:
 					xmax = std::min(960, xmax);
 					ymax = std::min(720, ymax);
 
-					cv::Rect object(xmin, ymin, xmax - xmin, ymax - ymin);
+					cv::Rect2d object(xmin, ymin, xmax - xmin, ymax - ymin);
+
 					cv::Mat object_depth = depth_matrix(object);
 
 					double distance = get_distance(object_depth);
 						
-					DetectionResult current_detection = { xmin, ymin, xmax, ymax, object_label, distance };
-					results_.push_back(current_detection);
+					DetectionResult current_detection = { xmin, ymin, xmax, ymax, object_label, distance, 0, object };
+
+					SPDLOG_INFO("Detected object, x {}, y {}, height {}, width {}", object.x, object.y, object.height, object.width);
+
+					bool check_tracking = false;
+
+					for (auto tracked_object : results_) {
+						SPDLOG_INFO("Checking new object against object x {}, y {}, height {}, width {}", tracked_object.second.bounding_box.x, tracked_object.second.bounding_box.y, tracked_object.second.bounding_box.height, tracked_object.second.bounding_box.width );
+						float overlap = calculate_overlap(tracked_object.second, current_detection);
+						if (overlap > 0.8) {
+							check_tracking = true;
+							break;
+
+						}
+					}
+
+					if (!check_tracking) {
+						current_detection.id = free_ids.front();
+						free_ids.pop();
+						auto tracker = create_tracker();
+						tracker->init(color_matrix, object);
+						new_results.push_back(std::pair<cv::Ptr<cv::Tracker>, DetectionResult> (tracker, current_detection));
+					}
+					
+
 
 				}
 
+			}
+			for (auto result : new_results) {
+				results_.push_back(result);
 			}
 
 		}
@@ -255,6 +321,22 @@ public:
 			return distance;
 
 	}
+
+		cv::Ptr<cv::Tracker> create_tracker() {
+			return cv::TrackerMOSSE::create();
+		}
+
+		float calculate_overlap(DetectionResult& object_tracked, DetectionResult& object_detected) {
+
+			float intersection_area = (object_tracked.bounding_box & object_detected.bounding_box).area();
+
+			float reference_area = object_tracked.bounding_box.area() + object_detected.bounding_box.area() - intersection_area;
+
+	
+			float overlap = intersection_area / reference_area;
+					SPDLOG_INFO("{}", overlap);
+			return overlap;
+		}
 	};
 
 	/// <summary>
@@ -364,13 +446,7 @@ public:
 
 							float vertical_distance = sqrt(pow(upoint[0] - vpoint[0], 2.f) + pow(upoint[1] - vpoint[1], 2.f) + pow(upoint[2] - vpoint[2], 2.f))
 								;
-							float intersection_area =	std::max(0.0,std::min(prioritised_results[i].bottom_right.x, prioritised_results[j].bottom_right.x)-std::max(prioritised_results[i].bottom_left.x,prioritised_results[j].bottom_left.x)) *
-														std::max(0.0,std::min(prioritised_results[i].top_right.y, prioritised_results[j].top_right.y) - std::max(prioritised_results[i].bottom_right.y, prioritised_results[j].bottom_right.y));
-
-							float reference_area = std::min(std::abs((prioritised_results[i].bottom_right.x - prioritised_results[i].bottom_left.x)*(prioritised_results[i].bottom_right.y - prioritised_results[i].top_right.y)),
-								std::abs((prioritised_results[j].bottom_right.x - prioritised_results[j].bottom_left.x) * (prioritised_results[j].bottom_right.y - prioritised_results[j].top_right.y)));
-
-							float overlap = intersection_area / reference_area;
+						
 							SPDLOG_INFO("Vertical distance between object {} and {}: {}", prioritised_results[i].name, prioritised_results[j].name, vertical_distance);
 							SPDLOG_INFO("Overlap between these objects: {}", overlap);
 							if ((object1.name == "chair" && object2.name == "person") || (object1.name == "person" && object2.name == "chair")) {

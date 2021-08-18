@@ -70,7 +70,7 @@ int ServiceController::main() try {
 
 				processed_frames.enqueue(aligned);
 				process_frame_counter++;
-				SPDLOG_INFO("Enqueued a frame {}", process_frame_counter);
+			/*	SPDLOG_INFO("Enqueued a frame {}", process_frame_counter);*/
 			}
 		}
 		});
@@ -83,16 +83,16 @@ int ServiceController::main() try {
 		while (output_stream_controller_.should_receive_new_frames()) {
 
 			if (processed_frames.poll_for_frame(&curr_frame)) {
-				if (mats.size() > 3) {
-					SPDLOG_INFO("SKIPPED"); continue;
-				}
+	//			if (mats.size() > 3) {
+	///*				SPDLOG_INFO("SKIPPED"); continue;*/
+	//			}
 					auto color_matrix = frame_to_mat(curr_frame.get_color_frame());
 					auto depth_matrix = depth_frame_to_meters(curr_frame.get_depth_frame());
 					color_matrix = color_matrix(crop);
 					depth_matrix = depth_matrix(crop);
 					mats.push(std::pair<std::unique_ptr<cv::Mat>, std::unique_ptr<cv::Mat>> { std::make_unique<cv::Mat>(color_matrix), std::make_unique<cv::Mat>(depth_matrix)});
 					translate_frame_counter++;
-					SPDLOG_INFO("Translated a frame {}", translate_frame_counter);
+					//SPDLOG_INFO("Translated a frame {}", translate_frame_counter);
 		
 			}
 
@@ -101,6 +101,10 @@ int ServiceController::main() try {
 
 	bool skipper = false;
 	auto& results = inference_controller_.results_;
+	auto& free_ids = inference_controller_.free_ids;
+
+
+
 	while (output_stream_controller_.should_receive_new_frames()) {
 		
 		try {
@@ -113,22 +117,29 @@ int ServiceController::main() try {
 				cv::Mat curr_depth_matrix = *(mats.front().second);
 
 
-					SPDLOG_INFO("Conversion and cropping complete");
+					//SPDLOG_INFO("Conversion and cropping complete");
 
+					for (int i = 0; i < results.size(); i++) {
 
-					if (!skipper) {
-						inference_controller_.process_frames(curr_color_matrix, curr_depth_matrix);
+						if (!results[i].first->update(curr_color_matrix, results[i].second.bounding_box)) {
+							SPDLOG_INFO("Lost a tracked object {} - erasing", results[i].second.id);
+							free_ids.push(results[i].second.id);
+							results.erase(results.begin() + i);
+						}
 					}
 
+
+					if (!skipper) inference_controller_.process_frames(curr_color_matrix, curr_depth_matrix);
+			
 
 
 					for (unsigned int objectIndex = 0; objectIndex < results.size(); objectIndex++)
 					{
 						// Display label and distance text on the bounding box
-						std::string textToDisplay = cv::format("%d, %f m", results.at(objectIndex).label, results.at(objectIndex).distance);
-						cv::putText(curr_color_matrix, textToDisplay, cv::Point2f(results.at(objectIndex).xmin, results.at(objectIndex).ymin), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(0, 255, 0, 255), 2);
+						std::string textToDisplay = cv::format("%d, %f m, %d", results.at(objectIndex).second.label, results.at(objectIndex).second.distance, results.at(objectIndex).second.id);
+						cv::putText(curr_color_matrix, textToDisplay, cv::Point2f(results.at(objectIndex).second.xmin, results.at(objectIndex).second.ymin), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(0, 255, 0, 255), 2);
 						// Draw bounding box
-						cv::rectangle(curr_color_matrix, cv::Point2f(results.at(objectIndex).xmin, results.at(objectIndex).ymin), cv::Point2f(results.at(objectIndex).xmax, results.at(objectIndex).ymax), cv::Scalar(0, 255, 0, 255), 1);
+						cv::rectangle(curr_color_matrix, results.at(objectIndex).second.bounding_box, cv::Scalar(0, 255, 0, 255), 1);
 					}
 
 					infer_frame_counter++;
