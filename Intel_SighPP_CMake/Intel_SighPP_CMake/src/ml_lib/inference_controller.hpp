@@ -27,10 +27,6 @@
 /// 
 struct DetectionResult
 {
-float xmin = 0.0;      // coordinate of bounding box
-float ymin = 0.0;      // coordinate of bounding box
-float xmax = 0.0;      // coordinate of bounding box
-float ymax = 0.0;      // coordinate of bounding box
 int label = 0;
 double distance = 0;
 int id = 0;
@@ -187,7 +183,7 @@ public:
 		}
 	}
 
-	void process_frames(const cv::Mat& color_matrix, const cv::Mat& depth_matrix) {
+	void process_frames(const cv::UMat& color_matrix, const cv::UMat& depth_matrix) {
 
 		try {
 			//Clear detections vector
@@ -254,10 +250,10 @@ public:
 
 				int object_label = detections[detection_index * object_size + 1];
 				float confidence = detections[detection_index * object_size + 2];
-				int xmin = (int)(detections[detection_index * object_size + 3] * 960);
-				int ymin = (int)(detections[detection_index * object_size + 4] * 720);
-				int xmax = (int)(detections[detection_index * object_size + 5] * 960);
-				int ymax = (int)(detections[detection_index * object_size + 6] * 720);
+				int xmin = (int)(detections[detection_index * object_size + 3] * color_matrix.cols);
+				int ymin = (int)(detections[detection_index * object_size + 4] * color_matrix.rows);
+				int xmax = (int)(detections[detection_index * object_size + 5] * color_matrix.cols);
+				int ymax = (int)(detections[detection_index * object_size + 6] * color_matrix.rows);
 
 				if (confidence > 0.5 && object_label == 1) {
 
@@ -265,26 +261,28 @@ public:
 					xmin = std::max(0, xmin);
 
 					ymin = std::max(0, ymin);
-					xmax = std::min(960, xmax);
-					ymax = std::min(720, ymax);
+					xmax = std::min(color_matrix.rows, xmax);
+					ymax = std::min(color_matrix.cols, ymax);
 
 					cv::Rect2d object(xmin, ymin, xmax - xmin, ymax - ymin);
-
-					cv::Mat object_depth = depth_matrix(object);
+		
+					SPDLOG_INFO("Detected object, x {}, y {}, height {}, width {}", object.x, object.y, object.height, object.width);
+					cv::UMat object_depth = depth_matrix(object);
 
 					double distance = get_distance(object_depth);
 						
-					DetectionResult current_detection = { xmin, ymin, xmax, ymax, object_label, distance, 0, object };
+					DetectionResult current_detection = {object_label, distance, 0, object };
 
-					SPDLOG_INFO("Detected object, x {}, y {}, height {}, width {}", object.x, object.y, object.height, object.width);
+
 
 					bool check_tracking = false;
 
-					for (auto tracked_object : results_) {
+					for (auto &tracked_object : results_) {
 						SPDLOG_INFO("Checking new object against object x {}, y {}, height {}, width {}", tracked_object.second.bounding_box.x, tracked_object.second.bounding_box.y, tracked_object.second.bounding_box.height, tracked_object.second.bounding_box.width );
 						float overlap = calculate_overlap(tracked_object.second, current_detection);
-						if (overlap > 0.8) {
+						if (overlap > 0.5) {
 							check_tracking = true;
+							tracked_object.second.distance = distance;
 							break;
 
 						}
@@ -310,9 +308,10 @@ public:
 		}
 		catch (const std::exception& e) {
 			SPDLOG_ERROR(e.what());
+			abort();
 		}
 	}
-		double get_distance(cv::Mat & object) {
+		double get_distance(cv::UMat & object) {
 			if (!object.isContinuous()) object = object.clone();
 			object = object.reshape(0, 1);
 			cv::Mat label, centers;
@@ -334,7 +333,7 @@ public:
 
 	
 			float overlap = intersection_area / reference_area;
-					SPDLOG_INFO("{}", overlap);
+
 			return overlap;
 		}
 	};

@@ -33,7 +33,7 @@ int ServiceController::main() try {
 	int infer_frame_counter = 0;
 	SPDLOG_INFO("Instantiated Service Controller");
 	std::mutex lock;
-	std::queue< std::pair<std::unique_ptr<cv::Mat>, std::unique_ptr<cv::Mat>>> mats;
+	std::queue< std::tuple<std::unique_ptr<cv::Mat>, std::unique_ptr<cv::UMat>, std::unique_ptr<cv::UMat>>> mats;
 	int counter = 0;
 	rs2::decimation_filter dec_filter;
 	rs2::spatial_filter spat_filter;
@@ -83,14 +83,20 @@ int ServiceController::main() try {
 		while (output_stream_controller_.should_receive_new_frames()) {
 
 			if (processed_frames.poll_for_frame(&curr_frame)) {
-	//			if (mats.size() > 3) {
-	///*				SPDLOG_INFO("SKIPPED"); continue;*/
-	//			}
+				if (mats.size() > 3) {
+					continue;
+				}
 					auto color_matrix = frame_to_mat(curr_frame.get_color_frame());
 					auto depth_matrix = depth_frame_to_meters(curr_frame.get_depth_frame());
 					color_matrix = color_matrix(crop);
 					depth_matrix = depth_matrix(crop);
-					mats.push(std::pair<std::unique_ptr<cv::Mat>, std::unique_ptr<cv::Mat>> { std::make_unique<cv::Mat>(color_matrix), std::make_unique<cv::Mat>(depth_matrix)});
+					cv::UMat color_matrix_comp;
+					cv::UMat depth_matrix_comp;
+
+					cv::resize(color_matrix, color_matrix_comp, cv::Size(), 0.66, 0.66);
+					cv::resize(depth_matrix, depth_matrix_comp, cv::Size(), 0.66, 0.66);
+					mats.push(std::tuple<std::unique_ptr<cv::Mat>, std::unique_ptr<cv::UMat>, std::unique_ptr<cv::UMat>> 
+					{ std::make_unique<cv::Mat>(color_matrix), std::make_unique<cv::UMat>(color_matrix_comp), std::make_unique<cv::UMat>(depth_matrix_comp)});
 					translate_frame_counter++;
 					//SPDLOG_INFO("Translated a frame {}", translate_frame_counter);
 		
@@ -109,37 +115,45 @@ int ServiceController::main() try {
 		
 		try {
 			if (mats.empty()) continue;
-			if ((*(mats.front().first)).total() == 960*720)  {
+			if ((*(std::get<0>(mats.front()))).total() == crop.area())  {
 		
 
-				cv::Mat curr_color_matrix = *(mats.front().first);
+				cv::Mat color_matrix = *(std::get<0>(mats.front()));
+				cv::UMat color_matrix_comp = *(std::get<1>(mats.front()));
+				cv::UMat depth_matrix_comp = *(std::get<2>(mats.front()));
 
-				cv::Mat curr_depth_matrix = *(mats.front().second);
 
-
-					//SPDLOG_INFO("Conversion and cropping complete");
-
+					SPDLOG_INFO("Conversion and cropping complete");
+				
 					for (int i = 0; i < results.size(); i++) {
-
-						if (!results[i].first->update(curr_color_matrix, results[i].second.bounding_box)) {
+						SPDLOG_INFO("UPDATING TRACKER");
+						bool tracker_update = results[i].first->update(color_matrix_comp, results[i].second.bounding_box);
+						SPDLOG_INFO("UPDATED TRACKER");
+						if (!tracker_update || results[i].second.bounding_box.x <= 0 || results[i].second.bounding_box.y <= 0) {
 							SPDLOG_INFO("Lost a tracked object {} - erasing", results[i].second.id);
 							free_ids.push(results[i].second.id);
 							results.erase(results.begin() + i);
 						}
-					}
+			
 
+						}
+						SPDLOG_INFO("Completed trackers checking");
+					
 
-					if (!skipper) inference_controller_.process_frames(curr_color_matrix, curr_depth_matrix);
+						if(!skipper) inference_controller_.process_frames(color_matrix_comp, depth_matrix_comp);
 			
 
 
 					for (unsigned int objectIndex = 0; objectIndex < results.size(); objectIndex++)
 					{
+
 						// Display label and distance text on the bounding box
 						std::string textToDisplay = cv::format("%d, %f m, %d", results.at(objectIndex).second.label, results.at(objectIndex).second.distance, results.at(objectIndex).second.id);
-						cv::putText(curr_color_matrix, textToDisplay, cv::Point2f(results.at(objectIndex).second.xmin, results.at(objectIndex).second.ymin), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(0, 255, 0, 255), 2);
+						cv::putText(color_matrix, textToDisplay, cv::Point2f(results.at(objectIndex).second.bounding_box.x*3/2, results.at(objectIndex).second.bounding_box.y*3/2), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(0, 255, 0, 255), 2);
 						// Draw bounding box
-						cv::rectangle(curr_color_matrix, results.at(objectIndex).second.bounding_box, cv::Scalar(0, 255, 0, 255), 1);
+						cv::Rect2d bounding_box(results.at(objectIndex).second.bounding_box.x * 3 / 2, results.at(objectIndex).second.bounding_box.y * 3 / 2, results.at(objectIndex).second.bounding_box.width * 3 / 2, results.at(objectIndex).second.bounding_box.height * 3 / 2);
+						cv::rectangle(color_matrix, bounding_box, cv::Scalar(0, 255, 0, 255), 1);
+
 					}
 
 					infer_frame_counter++;
@@ -150,7 +164,7 @@ int ServiceController::main() try {
 			/*		if (counter == 100) {
 						return 0;
 					}*/
-					cv::imshow("realsense", curr_color_matrix);
+					cv::imshow("realsense", color_matrix);
 					cv::waitKey(1);
 					skipper = !skipper;
 					mats.pop();
