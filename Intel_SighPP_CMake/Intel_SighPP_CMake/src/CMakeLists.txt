@@ -20,9 +20,9 @@ set(SRC_FILES
 	  ${PROJECT_SOURCE_DIR}/Intel_SighPP_CMake/src/interface_controller/api_controller.hpp
 	  ${PROJECT_SOURCE_DIR}/Intel_SighPP_CMake/src/interface_controller/api_impl_websocket.cpp
 	  ${PROJECT_SOURCE_DIR}/Intel_SighPP_CMake/src/interface_controller/api_user_interface.hpp
-    ${PROJECT_SOURCE_DIR}/Intel_SighPP_CMake/src/ML_Lib/caffe_impl.cpp
     
-    ${PROJECT_SOURCE_DIR}/Intel_SighPP_CMake/src/ML_Lib/ml_interface.hpp
+    
+    "ml_lib/inference_controller.cpp"
     "ml_lib/inference_controller.hpp"
     ${PROJECT_SOURCE_DIR}/Intel_SighPP_CMake/src/ ML_Lib/object_tracking.cpp
     ${PROJECT_SOURCE_DIR}/Intel_SighPP_CMake/src/ML_Lib/object_tracking.hpp
@@ -48,7 +48,7 @@ set(SRC_FILES
 
 
 
-add_executable(intel_sightPP ${SRC_FILES}) #"Intel Sight ++.cpp" "service_controller.cpp") #${SRC_FILES})
+add_executable(intel_sightPP ${SRC_FILES} "ml_lib/types.hpp") #"Intel Sight ++.cpp" "service_controller.cpp") #${SRC_FILES})
 
     #
   #  ${PROJECT_SOURCE_DIR}/Intel_SighPP_CMake/models/MobileNetSSD_deploy.caffemodel

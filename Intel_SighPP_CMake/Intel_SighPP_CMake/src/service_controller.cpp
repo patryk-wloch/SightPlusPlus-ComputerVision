@@ -23,30 +23,22 @@ struct detectionResults
 
 };
 ServiceController::ServiceController(
-	rs2::pipeline& pipe, InferenceController& inference_controller, ApiController& api_controller, OutputStreamController output_controller, const rs2::video_stream_profile& profile)
-	: pipe_(pipe), inference_controller_(inference_controller), api_controller_(api_controller), output_stream_controller_(std::move(output_controller)), profile_(profile)
+	rs2::pipeline& pipe, InferenceController& inference_controller, ApiController& api_controller, OutputStreamController output_controller, const rs2::video_stream_profile& profile, ObjectTracker object_tracker)
+	: pipe_(pipe), inference_controller_(inference_controller), api_controller_(api_controller), output_stream_controller_(std::move(output_controller)), profile_(profile), object_tracker(object_tracker)
 {}
 
 int ServiceController::main() try {
-	int process_frame_counter = 0;
-	int translate_frame_counter = 0;
-	int infer_frame_counter = 0;
+
 	SPDLOG_INFO("Instantiated Service Controller");
-	std::mutex lock;
-	std::queue< std::tuple<std::unique_ptr<cv::Mat>, std::unique_ptr<cv::UMat>, std::unique_ptr<cv::UMat>>> mats;
-	int counter = 0;
-	rs2::decimation_filter dec_filter;
-	rs2::spatial_filter spat_filter;
-	rs2::hole_filling_filter  hole_filter;
+
 	dec_filter.set_option(RS2_OPTION_FILTER_MAGNITUDE, 2);
 	spat_filter.set_option(RS2_OPTION_HOLES_FILL, 3);
 	hole_filter.set_option(RS2_OPTION_HOLES_FILL, 1);
+
 	rs2::align align_to(RS2_STREAM_COLOR);
-	rs2::colorizer color_map;
-	rs2_intrinsics intr = profile_.get_intrinsics();
+
 	crop = create_rect(profile_);
 
-	rs2::frame_queue processed_frames;
 
 	//Frame processing thread
 	std::thread video_thread([&]() {
@@ -78,69 +70,73 @@ int ServiceController::main() try {
 	rs2::frameset curr_frame;
 
 
-
+	//Frame -> OpenCV Mat conversion thread
 	std::thread cv_translation_thread([&]() {
 		while (output_stream_controller_.should_receive_new_frames()) {
 
+			//Check if new frame available from camera / recording
 			if (processed_frames.poll_for_frame(&curr_frame)) {
+
+				//Skip the frame if too many in the queue for object detection
 				if (mats.size() > 3) {
 					continue;
 				}
+
+					//Convert the realsense frame to OpenCV matrix
 					auto color_matrix = frame_to_mat(curr_frame.get_color_frame());
 					auto depth_matrix = depth_frame_to_meters(curr_frame.get_depth_frame());
+
+					//Crop the matrices to the same size
 					color_matrix = color_matrix(crop);
 					depth_matrix = depth_matrix(crop);
+
+					//Compress the matrices
 					cv::UMat color_matrix_comp;
 					cv::UMat depth_matrix_comp;
+					cv::resize(color_matrix, color_matrix_comp, cv::Size(), 0.6666, 0.6666);
+					cv::resize(depth_matrix, depth_matrix_comp, cv::Size(), 0.6666, 0.6666);
 
-					cv::resize(color_matrix, color_matrix_comp, cv::Size(), 0.66, 0.66);
-					cv::resize(depth_matrix, depth_matrix_comp, cv::Size(), 0.66, 0.66);
+					//Add converted matrices to the queue for object detection
 					mats.push(std::tuple<std::unique_ptr<cv::Mat>, std::unique_ptr<cv::UMat>, std::unique_ptr<cv::UMat>> 
 					{ std::make_unique<cv::Mat>(color_matrix), std::make_unique<cv::UMat>(color_matrix_comp), std::make_unique<cv::UMat>(depth_matrix_comp)});
-					translate_frame_counter++;
-					//SPDLOG_INFO("Translated a frame {}", translate_frame_counter);
 		
 			}
 
 		}
 		});
 
-	bool skipper = false;
-	auto& results = inference_controller_.results_;
+	//References to objects in ML controller instance
+	auto& results = inference_controller_.objects;
 	auto& free_ids = inference_controller_.free_ids;
-
 
 
 	while (output_stream_controller_.should_receive_new_frames()) {
 		
 		try {
+			//If no matrices ready, skip
 			if (mats.empty()) continue;
-			if ((*(std::get<0>(mats.front()))).total() == crop.area())  {
 		
+			//Check if the matrix in front of the queue fully written
+			if ((*(std::get<0>(mats.front()))).total() == crop.area())  {
 
+				//Allow camera time to adjust exposition before starting to process - 15 frames
+				if (infer_frame_counter < 15) {
+					mats.pop();
+					infer_frame_counter++;
+					continue;
+				}
+
+				//Retrieve current matrices from pointers
 				cv::Mat color_matrix = *(std::get<0>(mats.front()));
 				cv::UMat color_matrix_comp = *(std::get<1>(mats.front()));
 				cv::UMat depth_matrix_comp = *(std::get<2>(mats.front()));
-
-
-					SPDLOG_INFO("Conversion and cropping complete");
 				
-					for (int i = 0; i < results.size(); i++) {
-						SPDLOG_INFO("UPDATING TRACKER");
-						bool tracker_update = results[i].first->update(color_matrix_comp, results[i].second.bounding_box);
-						SPDLOG_INFO("UPDATED TRACKER");
-						if (!tracker_update || results[i].second.bounding_box.x <= 0 || results[i].second.bounding_box.y <= 0) {
-							SPDLOG_INFO("Lost a tracked object {} - erasing", results[i].second.id);
-							free_ids.push(results[i].second.id);
-							results.erase(results.begin() + i);
-						}
-			
+				object_tracker.update_all_trackers(color_matrix_comp);
 
-						}
-						SPDLOG_INFO("Completed trackers checking");
+				SPDLOG_INFO("Completed trackers checking");
 					
 
-						if(!skipper) inference_controller_.process_frames(color_matrix_comp, depth_matrix_comp);
+				if(!skipper) inference_controller_.process_frames(color_matrix_comp, depth_matrix_comp);
 			
 
 
@@ -148,7 +144,7 @@ int ServiceController::main() try {
 					{
 
 						// Display label and distance text on the bounding box
-						std::string textToDisplay = cv::format("%d, %f m, %d", results.at(objectIndex).second.label, results.at(objectIndex).second.distance, results.at(objectIndex).second.id);
+						std::string textToDisplay = cv::format("human, %f m,id %d", results.at(objectIndex).second.distance, results.at(objectIndex).second.id);
 						cv::putText(color_matrix, textToDisplay, cv::Point2f(results.at(objectIndex).second.bounding_box.x*3/2, results.at(objectIndex).second.bounding_box.y*3/2), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(0, 255, 0, 255), 2);
 						// Draw bounding box
 						cv::Rect2d bounding_box(results.at(objectIndex).second.bounding_box.x * 3 / 2, results.at(objectIndex).second.bounding_box.y * 3 / 2, results.at(objectIndex).second.bounding_box.width * 3 / 2, results.at(objectIndex).second.bounding_box.height * 3 / 2);
@@ -166,6 +162,9 @@ int ServiceController::main() try {
 					}*/
 					cv::imshow("realsense", color_matrix);
 					cv::waitKey(1);
+					for (auto& event : events) {
+						SPDLOG_INFO("{}", event.first);
+					}
 					skipper = !skipper;
 					mats.pop();
 

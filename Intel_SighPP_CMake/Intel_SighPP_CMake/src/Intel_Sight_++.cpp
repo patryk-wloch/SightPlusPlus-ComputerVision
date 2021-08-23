@@ -13,6 +13,7 @@
 #include "interface_controller/api_impl_websocket.cpp"
 #include "interface_controller/output_stream_controller.hpp"
 #include "ml_lib/inference_controller.hpp"
+#include "ml_lib/types.hpp"
 
 int main(int argc, char** argv)
 {
@@ -191,11 +192,10 @@ int main(int argc, char** argv)
 		SPDLOG_INFO("{}: {}x{}", profile.stream_name(), profile.width(), profile.height());
 	}
 
-	InferenceController inference_controller;
+	InferenceController inference_controller(path_to_model, vino_config);
 	if (!inference_controller.start()) return EXIT_FAILURE;
-	// TODO Read command line parameters for which models to use?
-	// TODO Add correct paths for testing
-	// TODO Add command line parameter for files to use?
+
+	ObjectTracker object_tracker(inference_controller.objects, inference_controller.free_ids);
 
 	auto profile = config.get_stream(RS2_STREAM_COLOR).as<rs2::video_stream_profile>();
 
@@ -211,6 +211,6 @@ int main(int argc, char** argv)
 	OutputStreamController output_stream_controller(stream_depth, stream_color);
 	SPDLOG_INFO("Setting up Output Stream Windows");
 
-	ServiceController service(pipe, inference_controller, api, output_stream_controller, profile);
+	ServiceController service(pipe, inference_controller, api, output_stream_controller, profile, object_tracker);
 	service.main();
 }
