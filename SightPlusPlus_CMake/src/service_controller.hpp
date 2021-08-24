@@ -10,22 +10,17 @@
 #include "interface_controller/output_stream_controller.hpp"
 #include "ml_lib/inference_controller.hpp"
 #include "ml_lib/object_tracking.hpp"
+#include "config.hpp"
 
 class ServiceController {
 
-	rs2::pipeline pipe_;
-	InferenceController inference_controller_;
-	ApiController api_controller_;
-	OutputStreamController output_stream_controller_;
-	rs2::video_stream_profile profile_;
+	rs2::pipeline pipe;
+	InferenceController inference_controller;
+	ApiController api_controller;
+	OutputStreamController output_stream_controller;
+	rs2::video_stream_profile profile;
 	ObjectTracker object_tracker;
 	cv::Rect crop;
-
-	const size_t inWidth = 640;
-	const size_t inHeight = 480;
-	const float WHRatio = inWidth / (float)inHeight;
-	const float inScaleFactor = 0.007843f;
-	const float meanVal = 127.5;
 
 	int process_frame_counter = 0;
 	int translate_frame_counter = 0;
@@ -38,12 +33,15 @@ class ServiceController {
 	rs2::hole_filling_filter  hole_filter;
 
 	rs2::colorizer color_map;
-	rs2_intrinsics intr = profile_.get_intrinsics();
+	rs2_intrinsics intr = profile.get_intrinsics();
 
 	rs2::frame_queue processed_frames;
 
 	bool skipper = false;
 
+	//References to objects in ML controller instance
+	std::vector<tracked_object>& objects = inference_controller.objects;
+	tbb::concurrent_queue<int>& free_ids = inference_controller.free_ids;
 
 	std::vector<std::pair<std::string, long>> events;
 

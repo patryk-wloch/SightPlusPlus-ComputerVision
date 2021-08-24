@@ -4,65 +4,34 @@
 #pragma once
 #include "librealsense2/rs.hpp"
 #include "opencv2/opencv.hpp"
-
+#include "../config.hpp"
 
 class OutputStreamController {
 
-	std::string depth_output_window_;
-	bool show_depth_output_;
+	std::string depth_output_window;
+	bool show_depth_output;
 
-	std::string color_output_window_;
-	bool show_color_output_;
+	std::string color_output_window;
+	bool show_color_output;
 
 	rs2::colorizer color_map_;
 
 public:
 
-	virtual ~OutputStreamController() {};
 
 	OutputStreamController(const bool show_depth_window, const bool show_color_window);
 
-	/// <summary>
-	/// Sends depth and color frame to show in output stream windows, if enabled.
-	/// </summary>
-	/// <param name="depth_frame">Realsense Depth Frame</param>
-	/// <param name="depth_matrix">OpenCV matrix of the depth frame</param>
-	/// <param name="color_frame">Realsense Color Frame</param>
-	/// <param name="color_matrix">OpenCV matrix of the color frame</param>
-	/// <param name="vector">Vector of recognised objects</param>
-	//virtual void stream_to_windows(
-	//	const rs2::frame& depth_frame, cv::Mat depth_matrix,
-	//	const rs2::video_frame& color_frame, cv::Mat color_matrix,
-	//	const std::vector<ClassificationItem>& vector) const;
+	bool should_receive_new_frames() const;
 
-	/// <summary>
-	/// Output depth stream to window. Color map is pre-applied.
-	/// </summary>
-	/// <param name="frame">Depth frame with color-map pre-applied.</param>
-	//virtual void output_to_depth_window(const rs2::frame& frame) const;
+	bool wait_key() const;
+	bool is_depth_window_ready() const;
+	bool is_color_window_ready() const;
 
-	/// <summary>
-	/// Output color stream to window.
-	/// Also draws rectangles around recognised objects.
-	/// </summary>
-	/// <param name="color_matrix">Color frame</param>
-	/// <param name="depth_matrix">Depth frame</param>
-	/// <param name="vector">Rectangles will be drawn around these items</param>
-	//virtual void output_to_color_window(cv::Mat color_matrix, cv::Mat depth_matrix, const std::vector<ClassificationItem>& vector) const;
+	void stream(cv::Mat& color_matrix, cv::UMat& depth_matrix, std::vector<tracked_object>& objects);
 
-	/// <summary>
-	/// Tells the system if the OpenCV stream output windows are ready, if enabled.
-	/// In the case where no output stream windows are enabled, returns true.
-	/// Based on the rs-dnn and rs-imshow examples.
-	/// </summary>
-	/// <returns>
-	///   Returns TRUE if the windows are ready and can receive frames, or if no output stream windows are enabled.
-	///   Returns FALSE if the windows can not receive frames.
-	/// </returns>
-	virtual bool should_receive_new_frames() const;
+	void stream_color(cv::Mat& color_matrix, std::vector<tracked_object>& objects);
+	void stream_depth(cv::Mat& depth_matrix, std::vector<tracked_object>& objects);
 
-	virtual bool wait_key() const;
-	virtual bool is_depth_window_ready() const;
-	virtual bool is_color_window_ready() const;
+	cv::Scalar get_random_color();
 
 };

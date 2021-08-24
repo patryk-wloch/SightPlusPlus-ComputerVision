@@ -5,17 +5,16 @@
 
 #include <vector>
 
-#include "../../cv-helpers.hpp"
+#include "../helpers.hpp"
 #include "tbb/concurrent_vector.h"
 #include "tbb/parallel_for_each.h"
 #include "spdlog/spdlog.h"
-#include "../setup_helper.hpp"
 #include <inference_engine.hpp>
 #include <tbb/concurrent_vector.h>
 #include <tbb/concurrent_queue.h>
 #include <ngraph/ngraph.hpp>
 #include <opencv2/tracking/tracker.hpp>
-#include "types.hpp"
+#include "../config.hpp"
 #include "object_tracking.hpp"
 
 /// <summary>

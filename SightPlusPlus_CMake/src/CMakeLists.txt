@@ -12,7 +12,7 @@ cmake_minimum_required (VERSION 3.8)
 
 set(SRC_FILES 
 
-    ${PROJECT_SOURCE_DIR}/SightPlusPlus_CMake/src/setup_helper.hpp
+    
 	  ${PROJECT_SOURCE_DIR}/SightPlusPlus_CMake/src/interface_controller/output_stream_controller.cpp    
 	  ${PROJECT_SOURCE_DIR}/SightPlusPlus_CMake/src/interface_controller/output_stream_controller.hpp
 	  ${PROJECT_SOURCE_DIR}/SightPlusPlus_CMake/src/interface_controller/api_controller.cpp
@@ -46,7 +46,7 @@ set(SRC_FILES
 
 
 
-add_executable(intel_sightPP ${SRC_FILES} "ml_lib/types.hpp") #"Intel Sight ++.cpp" "service_controller.cpp") #${SRC_FILES})
+add_executable(intel_sightPP ${SRC_FILES} "config.hpp") #"Intel Sight ++.cpp" "service_controller.cpp") #${SRC_FILES})
 
     #
   #  ${PROJECT_SOURCE_DIR}/Intel_SighPP_CMake/models/MobileNetSSD_deploy.caffemodel

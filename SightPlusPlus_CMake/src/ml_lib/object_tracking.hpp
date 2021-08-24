@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 #include <opencv2/tracking.hpp>
-#include "types.hpp"
+#include "../config.hpp"
 #include <queue>
 #include <tbb/concurrent_queue.h>
 #include <tbb/parallel_for.h>

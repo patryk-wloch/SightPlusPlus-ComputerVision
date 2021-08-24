@@ -8,12 +8,12 @@
 #include <inference_engine.hpp>
 
 #include "service_controller.hpp"
-#include "setup_helper.hpp"
+#include "helpers.hpp"
 #include "interface_controller/api_controller.hpp"
 #include "interface_controller/api_impl_websocket.cpp"
 #include "interface_controller/output_stream_controller.hpp"
 #include "ml_lib/inference_controller.hpp"
-#include "ml_lib/types.hpp"
+#include "config.hpp"
 
 int main(int argc, char** argv)
 {
@@ -26,8 +26,6 @@ int main(int argc, char** argv)
 	auto stream_color = false;
 	auto port = 7979;
 	auto theme = 0;
-	std::set<std::string> outdoors_model = { "MobileNetSSD_deploy" };
-	std::set<std::string> indoors_model = { "no_bn" };
 
 	setup_logging();
 
@@ -54,6 +52,7 @@ int main(int argc, char** argv)
 	if (argc > 1)
 	{
 		SPDLOG_INFO("Flags found");
+
 		for (size_t i = 1; i < argc; i++)
 		{
 			// Capture next arg
@@ -63,8 +62,8 @@ int main(int argc, char** argv)
 			if (next_arg.compare("realsense") == 0)
 			{
 				SPDLOG_INFO("Streaming from camera");
-				cfg.enable_stream(RS2_STREAM_DEPTH, 848, 480, RS2_FORMAT_Z16, 30);
-				cfg.enable_stream(RS2_STREAM_COLOR, 1280, 720, RS2_FORMAT_BGR8, 30);
+				cfg.enable_stream(RS2_STREAM_DEPTH, 848, 480, RS2_FORMAT_Z16, CAMERA_FPS);
+				cfg.enable_stream(RS2_STREAM_COLOR, 1280, 720, RS2_FORMAT_BGR8, CAMERA_FPS);
 				continue;
 			}
 

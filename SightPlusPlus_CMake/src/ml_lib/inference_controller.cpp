@@ -62,7 +62,7 @@ bool InferenceController::start() {
 
 		exec_network_main = core.LoadNetwork(network_main, config);
 
-		SPDLOG_INFO("Loaded network into Inference Engine");
+		SPDLOG_INFO("Loaded network {} into Inference Engine", PATH_TO_MODEL);
 
 		//Create test Inference Request instance;
 		InferenceEngine::InferRequest infer_request = exec_network_main.CreateInferRequest();
@@ -170,7 +170,7 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 				int xmax = (int)(1.05 * detections[detection_index * object_size + 5] * color_matrix.cols);
 				int ymax = (int)(1.05 * detections[detection_index * object_size + 6] * color_matrix.rows);
 
-				if (confidence > 0.5 && object_label == 1) {
+				if (confidence > 0.5 && object_label == 15) {
 
 					xmin = std::max(0, xmin);
 					ymin = std::max(0, ymin);
@@ -204,7 +204,7 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 					for (auto& tracked_object : objects) {
 						float overlap = calculate_overlap(tracked_object.second, candidate_object);
 
-						if (overlap > 0.5) {
+						if (overlap > 0.3) {
 							check_tracking = true;
 
 							if (overlap < 0.75 || tracked_object.second.no_rc_counter > TARGET_FPS) {
