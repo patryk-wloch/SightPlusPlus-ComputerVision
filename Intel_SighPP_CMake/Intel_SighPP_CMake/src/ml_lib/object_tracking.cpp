@@ -4,9 +4,12 @@
 #include "object_tracking.hpp"
 
 
-void ObjectTracker::update_all_trackers(cv::UMat & color_matrix) {
+void ObjectTracker::update_all_trackers(std::vector<tracked_object> &objects, cv::UMat & color_matrix) {
 
-	for (unsigned int i = 0; i < objects.size(); i++) {
+	tbb::parallel_for(tbb::blocked_range<int>(0, objects.size()), [&](tbb::blocked_range<int> r) {
+
+
+		for (unsigned int i = r.begin(); i < r.end(); i++) {
 		auto& object = objects[i];
 
 		bool update_success = update_tracker(object, color_matrix);
@@ -22,6 +25,7 @@ void ObjectTracker::update_all_trackers(cv::UMat & color_matrix) {
 		}
 
 	}
+		});
 }
 
 bool ObjectTracker::update_tracker(tracked_object &object, cv::UMat& color_matrix) {

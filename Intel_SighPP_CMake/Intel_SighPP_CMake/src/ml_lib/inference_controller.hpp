@@ -13,6 +13,7 @@
 #include "../setup_helper.hpp"
 #include <inference_engine.hpp>
 #include <tbb/concurrent_vector.h>
+#include <tbb/concurrent_queue.h>
 #include <ngraph/ngraph.hpp>
 #include <opencv2/tracking/tracker.hpp>
 #include "types.hpp"
@@ -52,7 +53,7 @@ class InferenceController {
 public:
 
 	std::vector<tracked_object> objects;
-	std::queue<int> free_ids;
+	tbb::concurrent_queue<int> free_ids;
 
 	InferenceController(const std::string& path_to_model, const std::string& config);
 

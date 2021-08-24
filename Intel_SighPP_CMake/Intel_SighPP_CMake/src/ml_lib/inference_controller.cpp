@@ -101,8 +101,7 @@ void InferenceController::prepare_queue() {
 void InferenceController::process_frames(const cv::UMat& color_matrix, const cv::UMat& depth_matrix) {
 
 	try {
-		//Clear detections vector
-
+		SPDLOG_INFO("RECEIVED NEW FRAME");
 		//Resize input matrix to match network specification
 		cv::Mat img_input;
 		cv::resize(color_matrix, img_input, cv::Size(input_height, input_width));
@@ -154,78 +153,91 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 		auto output_access_holder = output_buffer->rmap();
 		const float* detections = output_access_holder.as<InferenceEngine::PrecisionTrait<InferenceEngine::Precision::FP32>::value_type*>();
 
+		tbb::concurrent_vector<DetectionResult> candidate_objects;
+
+		SPDLOG_INFO("PROCESSING OUTPUTS FROM IE");
+		tbb::parallel_for(tbb::blocked_range<int>(0, max_proposals), [&](tbb::blocked_range<int> r) {
+
+			for (unsigned int detection_index = r.begin(); detection_index < r.end(); detection_index++) {
+				float image_id = detections[detection_index * object_size + 0];
+
+				if (image_id < 0) break;
+
+				int object_label = detections[detection_index * object_size + 1];
+				float confidence = detections[detection_index * object_size + 2];
+				int xmin = (int)(0.95 * detections[detection_index * object_size + 3] * color_matrix.cols);
+				int ymin = (int)(0.95 * detections[detection_index * object_size + 4] * color_matrix.rows);
+				int xmax = (int)(1.05 * detections[detection_index * object_size + 5] * color_matrix.cols);
+				int ymax = (int)(1.05 * detections[detection_index * object_size + 6] * color_matrix.rows);
+
+				if (confidence > 0.5 && object_label == 1) {
+
+					xmin = std::max(0, xmin);
+					ymin = std::max(0, ymin);
+					xmax = std::min(color_matrix.cols, xmax);
+					ymax = std::min(color_matrix.rows, ymax);
 
 
-		std::vector<std::pair<cv::Ptr<cv::Tracker>, DetectionResult>> new_results;
+					cv::Rect2d object(xmin, ymin, xmax - xmin, ymax - ymin);
 
-		for (unsigned int detection_index = 0; detection_index < max_proposals; detection_index++) {
-			float image_id = detections[detection_index * object_size + 0];
+					cv::UMat object_depth = depth_matrix(object);
 
-			if (image_id < 0) break;
-
-			int object_label = detections[detection_index * object_size + 1];
-			float confidence = detections[detection_index * object_size + 2];
-			int xmin = (int)(0.95 * detections[detection_index * object_size + 3] * color_matrix.cols);
-			int ymin = (int)(0.95 * detections[detection_index * object_size + 4] * color_matrix.rows);
-			int xmax = (int)(1.05 * detections[detection_index * object_size + 5] * color_matrix.cols);
-			int ymax = (int)(1.05 * detections[detection_index * object_size + 6] * color_matrix.rows);
-
-			if (confidence > 0.5 && object_label == 1) {
+					double distance = DEPTH ? get_distance(object_depth) : 0;
 
 
-				xmin = std::max(0, xmin);
+					DetectionResult current_detection = { object_label, distance, distance, 0, object };
 
-				ymin = std::max(0, ymin);
-				xmax = std::min(color_matrix.cols, xmax);
-				ymax = std::min(color_matrix.rows, ymax);
+					candidate_objects.push_back(current_detection);
 
-				cv::Rect2d object(xmin, ymin, xmax - xmin, ymax - ymin);
+				}
+			}
+			});
+		SPDLOG_INFO("PROCESSED OUTPUTS FROM IE");
 
-				cv::UMat object_depth = depth_matrix(object);
-
-				double distance = get_distance(object_depth);
-
-				DetectionResult current_detection = { object_label, distance, distance, 0, object };
+		std::vector<tracked_object> new_objects;
 
 
+		for (auto & candidate_object : candidate_objects) {
 
-				bool check_tracking = false;
+					bool check_tracking = false;
 
-				for (auto& tracked_object : objects_) {
-				
-					float overlap = calculate_overlap(tracked_object.second, current_detection);
-					if (overlap > 0.35) {
-						check_tracking = true;
+					for (auto& tracked_object : objects) {
+						float overlap = calculate_overlap(tracked_object.second, candidate_object);
 
-						if (overlap < 0.7 || tracked_object.second.no_rc_counter > target_fps) {
-							tracked_object.first = ObjectTracker::create_tracker();
-							tracked_object.first->init(color_matrix, object);
+						if (overlap > 0.5) {
+							check_tracking = true;
+
+							if (overlap < 0.75 || tracked_object.second.no_rc_counter > TARGET_FPS) {
+								tracked_object.first = ObjectTracker::create_tracker();
+								tracked_object.first->init(color_matrix, candidate_object.bounding_box);
+
+							}
+
+							//EMA distance stabilisation
+							tracked_object.second.distance = (float)(1 - ALPHA) * tracked_object.second.distance + ALPHA * candidate_object.distance;
+							tracked_object.second.no_rc_counter = 0;
+							break;
+
 						}
 
-						//EMA distance stabilisation
-						tracked_object.second.distance = (float)(1 - ALPHA) * tracked_object.second.distance + ALPHA * distance;
-						tracked_object.second.no_rc_counter = 0;
-						break;
-
 					}
+					if (!check_tracking) {
+						free_ids.try_pop(candidate_object.id);
+						auto tracker = ObjectTracker::create_tracker();
+						tracker->init(color_matrix, candidate_object.bounding_box);
+						new_objects.push_back(tracked_object(tracker, candidate_object));
+					}
+
+
+
 				}
 
-				if (!check_tracking) {
-					current_detection.id = free_ids.front();
-					free_ids.pop();
-					auto tracker = ObjectTracker::create_tracker();
-					tracker->init(color_matrix, object);
-					new_results.push_back(tracked_object(tracker, current_detection));
-				}
+		
 
-
-
-			}
-
+		for (auto &object : new_objects) {
+			objects.push_back(object);
 		}
-		for (auto result : new_results) {
-			objects.push_back(result);
-		}
+		SPDLOG_INFO("PROCESSED CANDIDATE OBJECTS");
 
 	}
 	catch (const std::exception& e) {
@@ -235,6 +247,7 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 }
 
 double InferenceController::get_distance(cv::UMat& object) {
+
 	if (!object.isContinuous()) object = object.clone();
 	object = object.reshape(0, 1);
 	cv::Mat label, centers;

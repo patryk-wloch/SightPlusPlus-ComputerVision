@@ -63,8 +63,8 @@ int main(int argc, char** argv)
 			if (next_arg.compare("realsense") == 0)
 			{
 				SPDLOG_INFO("Streaming from camera");
-				cfg.enable_stream(RS2_STREAM_DEPTH, 848, 480, RS2_FORMAT_Z16, 15);
-				cfg.enable_stream(RS2_STREAM_COLOR, 1280, 720, RS2_FORMAT_BGR8, 15);
+				cfg.enable_stream(RS2_STREAM_DEPTH, 848, 480, RS2_FORMAT_Z16, 30);
+				cfg.enable_stream(RS2_STREAM_COLOR, 1280, 720, RS2_FORMAT_BGR8, 30);
 				continue;
 			}
 
@@ -192,10 +192,10 @@ int main(int argc, char** argv)
 		SPDLOG_INFO("{}: {}x{}", profile.stream_name(), profile.width(), profile.height());
 	}
 
-	InferenceController inference_controller(path_to_model, vino_config);
+	InferenceController inference_controller(PATH_TO_MODEL, VINO_CONFIG);
 	if (!inference_controller.start()) return EXIT_FAILURE;
 
-	ObjectTracker object_tracker(inference_controller.objects, inference_controller.free_ids);
+	ObjectTracker object_tracker(inference_controller.free_ids);
 
 	auto profile = config.get_stream(RS2_STREAM_COLOR).as<rs2::video_stream_profile>();
 

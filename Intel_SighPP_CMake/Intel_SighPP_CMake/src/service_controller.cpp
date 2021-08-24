@@ -12,16 +12,7 @@
 #include "tbb/concurrent_vector.h"
 
 #include <stdint.h>
-struct detectionResults
-{
-	float xmin = 0.0;      // coordinate of bounding box
-	float ymin = 0.0;      // coordinate of bounding box
-	float xmax = 0.0;      // coordinate of bounding box
-	float ymax = 0.0;      // coordinate of bounding box
-	int label = 0;
-	double distance = 0;
 
-};
 ServiceController::ServiceController(
 	rs2::pipeline& pipe, InferenceController& inference_controller, ApiController& api_controller, OutputStreamController output_controller, const rs2::video_stream_profile& profile, ObjectTracker object_tracker)
 	: pipe_(pipe), inference_controller_(inference_controller), api_controller_(api_controller), output_stream_controller_(std::move(output_controller)), profile_(profile), object_tracker(object_tracker)
@@ -93,8 +84,8 @@ int ServiceController::main() try {
 					//Compress the matrices
 					cv::UMat color_matrix_comp;
 					cv::UMat depth_matrix_comp;
-					cv::resize(color_matrix, color_matrix_comp, cv::Size(), 0.6666, 0.6666);
-					cv::resize(depth_matrix, depth_matrix_comp, cv::Size(), 0.6666, 0.6666);
+					cv::resize(color_matrix, color_matrix_comp, cv::Size(), COMP_SCALE, COMP_SCALE);
+					cv::resize(depth_matrix, depth_matrix_comp, cv::Size(), COMP_SCALE, COMP_SCALE);
 
 					//Add converted matrices to the queue for object detection
 					mats.push(std::tuple<std::unique_ptr<cv::Mat>, std::unique_ptr<cv::UMat>, std::unique_ptr<cv::UMat>> 
@@ -131,7 +122,9 @@ int ServiceController::main() try {
 				cv::UMat color_matrix_comp = *(std::get<1>(mats.front()));
 				cv::UMat depth_matrix_comp = *(std::get<2>(mats.front()));
 				
-				object_tracker.update_all_trackers(color_matrix_comp);
+				SPDLOG_INFO("Updating trackers");
+
+				object_tracker.update_all_trackers(results, color_matrix_comp);
 
 				SPDLOG_INFO("Completed trackers checking");
 					
@@ -145,9 +138,9 @@ int ServiceController::main() try {
 
 						// Display label and distance text on the bounding box
 						std::string textToDisplay = cv::format("human, %f m,id %d", results.at(objectIndex).second.distance, results.at(objectIndex).second.id);
-						cv::putText(color_matrix, textToDisplay, cv::Point2f(results.at(objectIndex).second.bounding_box.x*3/2, results.at(objectIndex).second.bounding_box.y*3/2), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(0, 255, 0, 255), 2);
+						cv::putText(color_matrix, textToDisplay, cv::Point2f(results.at(objectIndex).second.bounding_box.x* (1.0/COMP_SCALE), results.at(objectIndex).second.bounding_box.y * (1.0 / COMP_SCALE)), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(0, 255, 0, 255), 2);
 						// Draw bounding box
-						cv::Rect2d bounding_box(results.at(objectIndex).second.bounding_box.x * 3 / 2, results.at(objectIndex).second.bounding_box.y * 3 / 2, results.at(objectIndex).second.bounding_box.width * 3 / 2, results.at(objectIndex).second.bounding_box.height * 3 / 2);
+						cv::Rect2d bounding_box(results.at(objectIndex).second.bounding_box.x * (1.0 / COMP_SCALE), results.at(objectIndex).second.bounding_box.y * (1.0 / COMP_SCALE), results.at(objectIndex).second.bounding_box.width * (1.0 / COMP_SCALE), results.at(objectIndex).second.bounding_box.height * (1.0/ COMP_SCALE));
 						cv::rectangle(color_matrix, bounding_box, cv::Scalar(0, 255, 0, 255), 1);
 
 					}
@@ -162,9 +155,6 @@ int ServiceController::main() try {
 					}*/
 					cv::imshow("realsense", color_matrix);
 					cv::waitKey(1);
-					for (auto& event : events) {
-						SPDLOG_INFO("{}", event.first);
-					}
 					skipper = !skipper;
 					mats.pop();
 
