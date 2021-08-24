@@ -1,0 +1,10 @@
+# ninja log v5
+0	6	0	clean	9992afb1f91dc381
+11	3963	6515196802752145	Intel_SighPP_CMake/src/CMakeFiles/intel_sightPP.dir/service_controller.cpp.obj	2a4ca6f5ce609433
+5	859	6515196771800018	Intel_SighPP_CMake/src/CMakeFiles/intel_sightPP.dir/interface_controller/api_controller.cpp.obj	37bf687851b4d285
+7	4063	6515196803772163	Intel_SighPP_CMake/src/CMakeFiles/intel_sightPP.dir/interface_controller/api_impl_websocket.cpp.obj	3b412899384dd208
+9	954	6515196772740015	Intel_SighPP_CMake/src/CMakeFiles/intel_sightPP.dir/ml_lib/object_tracking.cpp.obj	e9b7eb2753138034
+3	3398	6515196797140378	Intel_SighPP_CMake/src/CMakeFiles/intel_sightPP.dir/ml_lib/inference_controller.cpp.obj	b9d87be42656a7dd
+1	1900	6515196782195085	Intel_SighPP_CMake/src/CMakeFiles/intel_sightPP.dir/interface_controller/output_stream_controller.cpp.obj	c83887ec6df1e02
+13	6265	6515196825718103	Intel_SighPP_CMake/src/CMakeFiles/intel_sightPP.dir/Intel_Sight_++.cpp.obj	96c5b1767a3cb5f4
+6265	7633	6515196829956551	bin/intel_sightPP.exe	eb21b6584113a405

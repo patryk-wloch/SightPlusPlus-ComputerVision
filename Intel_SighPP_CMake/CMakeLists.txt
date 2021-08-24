@@ -1,32 +1,27 @@
-﻿# CMakeList.txt : Top-level CMake project file, do global configuration
-# and include sub-projects here.
+﻿# CMakeList.txt : CMake project for Intel_SighPP_CMake, include source and define
+# project specific logic here.
 #
-cmake_minimum_required (VERSION 3.8)
+cmake_minimum_required (VERSION 3.10)
 
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-#set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/<$<$CONFIG:DEBUG$>:${OUTPUT_DEBUG}$><$<$CONFIG:RELEASE$>:${OUTPUT_REL}$>")
-#set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/${OUTPUT_DEBUG})
-# Output directory for libraries in Release configuration
-#sset(CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/${OUTPUT_REL})
-#set(CMAKE_TOOLCHAIN_FILE C:/Users/svens/vcpkg/scripts/buildsystems/vcpkg.cmake
-# CACHE STRING "Vcpkg toolchain file")
-#set(VCPKG_TARGET_TRIPLET x64-windows)
+# Add source to this project's executable.
+# TODO: Add tests and install targets if needed.
 
-#set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-project (Intel_SighPP_CMake VERSION 0.1)
-find_package(OpenCV CONFIG REQUIRED)
-find_package(realsense2 CONFIG REQUIRED)
-find_package(TBB CONFIG REQUIRED)
-find_package(websocketpp CONFIG REQUIRED)
-find_package(GTest CONFIG REQUIRED)
-find_package(spdlog 1.6 CONFIG REQUIRED)
-find_package(InferenceEngine REQUIRED)
-find_package(ngraph REQUIRED)
+#file(GLOB MY_FILES 
+	#${CMAKE_CURRENT_SOURCE_DIR}/models/*.caffemodel
+	#${CMAKE_CURRENT_SOURCE_DIR}/models/*.prototxt
+	#${CMAKE_CURRENT_SOURCE_DIR}/models/*.txt) 
+#file(COPY ${MY_FILES} DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/models)
 
-add_subdirectory ("Intel_SighPP_CMake")
+#file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/models/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/src/debug/models)
+#file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/models/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/src/models)
+#file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/models/ DESTINATION ${CMAKE_BINARY_DIR}/bin/models)
+#file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/models/ DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/debug/models/)
+#file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/models/ DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/models/)
+#file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/models/ DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/release/models/)
+add_subdirectory("src")
 
-#find_package(GTest CONFIG REQUIRED PATHS C:/Users/svens/vcpkg/installed/x64-windows/share/gtest NO_DEFAULT_PATH)
-#find_package(OpenCV CONFIG REQUIRED PATHS C:/Users/svens/vcpkg/installed/x64-windows/share/opencv3 NO_DEFAULT_PATH)
-#find_package(realsense2 CONFIG REQUIRED PATHS C:/Users/svens/vcpkg/installed/x64-windows/share/realsense2 NO_DEFAULT_PATH)
-#find_package(TBB CONFIG REQUIRED PATHS C:/Users/svens/vcpkg/installed/x64-windows/share/tbb NO_DEFAULT_PATH)
+
+
+#ADD_SUBDIRECTORY("tests")
+#add_subdirectory("models")
+
