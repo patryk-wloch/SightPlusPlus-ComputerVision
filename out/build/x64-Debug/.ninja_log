@@ -1,9 +1,0 @@
-# ninja log v5
-16	1679	6515344162434282	SightPlusPlus_CMake/src/CMakeFiles/intel_sightPP.dir/ml_lib/object_tracking.cpp.obj	99d7701c2d825a30
-2	2321	6515344168839375	SightPlusPlus_CMake/src/CMakeFiles/intel_sightPP.dir/interface_controller/output_stream_controller.cpp.obj	7f34995a028f7fe3
-14	3479	6515344180394600	SightPlusPlus_CMake/src/CMakeFiles/intel_sightPP.dir/ml_lib/inference_controller.cpp.obj	62800d9f28e9edba
-10	4067	6515344186259785	SightPlusPlus_CMake/src/CMakeFiles/intel_sightPP.dir/interface_controller/api_impl_websocket.cpp.obj	5320ba386551fa8
-9	535	6515344328740359	SightPlusPlus_CMake/src/CMakeFiles/intel_sightPP.dir/interface_controller/api_controller.cpp.obj	7cd3e0f97ede66ca
-13	3165	6515344354970918	SightPlusPlus_CMake/src/CMakeFiles/intel_sightPP.dir/service_controller.cpp.obj	83b152501f3f613f
-12	5520	6515344378486106	SightPlusPlus_CMake/src/CMakeFiles/intel_sightPP.dir/Intel_Sight_++.cpp.obj	9f2ee222f487473f
-5520	6550	6515344382495734	bin/intel_sightPP.exe	9163ab9fe3e58573

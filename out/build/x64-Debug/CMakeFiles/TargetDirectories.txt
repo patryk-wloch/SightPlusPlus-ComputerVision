@@ -1,7 +1,0 @@
-C:/sightplusplus/SightPlusPlus-ComputerVision/out/build/x64-Debug/CMakeFiles/edit_cache.dir
-C:/sightplusplus/SightPlusPlus-ComputerVision/out/build/x64-Debug/CMakeFiles/rebuild_cache.dir
-C:/sightplusplus/SightPlusPlus-ComputerVision/out/build/x64-Debug/SightPlusPlus_CMake/CMakeFiles/edit_cache.dir
-C:/sightplusplus/SightPlusPlus-ComputerVision/out/build/x64-Debug/SightPlusPlus_CMake/CMakeFiles/rebuild_cache.dir
-C:/sightplusplus/SightPlusPlus-ComputerVision/out/build/x64-Debug/SightPlusPlus_CMake/src/CMakeFiles/intel_sightPP.dir
-C:/sightplusplus/SightPlusPlus-ComputerVision/out/build/x64-Debug/SightPlusPlus_CMake/src/CMakeFiles/edit_cache.dir
-C:/sightplusplus/SightPlusPlus-ComputerVision/out/build/x64-Debug/SightPlusPlus_CMake/src/CMakeFiles/rebuild_cache.dir
