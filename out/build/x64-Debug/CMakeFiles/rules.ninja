@@ -6,7 +6,7 @@
 # It is included in the main 'build.ninja'.
 
 # =============================================================================
-# Project: Intel_SighPP_CMake
+# Project: Intel_SightPlusPlus
 # Configurations: Debug
 # =============================================================================
 # =============================================================================
@@ -49,7 +49,7 @@ rule CXX_EXECUTABLE_LINKER__intel_sightPP_Debug
 # Rule for re-running cmake.
 
 rule RERUN_CMAKE
-  command = "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --regenerate-during-build -SC:\sightplusplus\SightPlusPlus-ComputerVision\Intel_SighPP_CMake -BC:\sightplusplus\SightPlusPlus-ComputerVision\Intel_SighPP_CMake\out\build\x64-Debug
+  command = "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --regenerate-during-build -SC:\sightplusplus\SightPlusPlus-ComputerVision -BC:\sightplusplus\SightPlusPlus-ComputerVision\out\build\x64-Debug
   description = Re-running CMake...
   generator = 1
 

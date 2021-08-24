@@ -1,4 +1,4 @@
-# Install script for directory: C:/sightplusplus/SightPlusPlus-ComputerVision
+# Install script for directory: C:/sightplusplus/SightPlusPlus-ComputerVision/SightPlusPlus_CMake
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -34,17 +34,7 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for each subdirectory.
-  include("C:/sightplusplus/SightPlusPlus-ComputerVision/out/build/x64-Debug/SightPlusPlus_CMake/cmake_install.cmake")
+  include("C:/sightplusplus/SightPlusPlus-ComputerVision/out/build/x64-Debug/SightPlusPlus_CMake/src/cmake_install.cmake")
 
 endif()
 
-if(CMAKE_INSTALL_COMPONENT)
-  set(CMAKE_INSTALL_MANIFEST "install_manifest_${CMAKE_INSTALL_COMPONENT}.txt")
-else()
-  set(CMAKE_INSTALL_MANIFEST "install_manifest.txt")
-endif()
-
-string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
-       "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "C:/sightplusplus/SightPlusPlus-ComputerVision/out/build/x64-Debug/${CMAKE_INSTALL_MANIFEST}"
-     "${CMAKE_INSTALL_MANIFEST_CONTENT}")
