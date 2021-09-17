@@ -32,9 +32,72 @@ int ServiceController::main() try {
 	crop = create_rect(profile);
 
 	//Camera interface and frame processing thread
-	std::thread video_thread([&]() {
+	//std::thread video_thread([&]() {
+	//	
+	//	while (output_stream_controller.should_receive_new_frames()) {
+	//		rs2::frameset data;
+
+	//		if (pipe.poll_for_frames(&data)) {
+
+	//			//Decimation filter
+	//			rs2::frameset processed = dec_filter.process(data);
+
+	//			//Spatial filter
+	//			processed = spat_filter.process(processed);
+
+	//			//Hole-filling filter
+	//			processed = hole_filter.process(processed);
+
+	//			//Align color and depth frame to each other
+	//			rs2::frameset aligned = align_to.process(processed);
+
+	//			processed_frames.enqueue(aligned);
+	//
+	//		}
+	//	}
+	//	});
+
+	//rs2::frameset curr_frame;
+
+	////RealSense Frame -> OpenCV Mat conversion thread
+	//std::thread cv_translation_thread([&]() {
+	//	while (output_stream_controller.should_receive_new_frames()) {
+
+	//		//Check if new frame available from camera / recording
+	//		if (processed_frames.poll_for_frame(&curr_frame)) {
+
+	//			//Skip the frame if too many in the queue for object detection
+	//			if (mats.size() > 3) {
+	//				continue;
+	//			}
+
+	//				//Convert the realsense frame to OpenCV matrices
+	//				auto color_matrix = frame_to_mat(curr_frame.get_color_frame());
+	//				auto depth_matrix = depth_frame_to_meters(curr_frame.get_depth_frame());
+
+	//				//Crop the matrices to the same size
+	//				color_matrix = color_matrix(crop);
+	//				depth_matrix = depth_matrix(crop);
+
+	//				//Compress the matrices
+	//				cv::UMat color_matrix_comp;
+	//				cv::UMat depth_matrix_comp;
+	//				cv::resize(color_matrix, color_matrix_comp, cv::Size(), COMP_SCALE, COMP_SCALE);
+	//				cv::resize(depth_matrix, depth_matrix_comp, cv::Size(), COMP_SCALE, COMP_SCALE);
+
+	//				//Add converted matrices to the queue for object detection
+	//				mats.push(std::tuple<std::unique_ptr<cv::Mat>, std::unique_ptr<cv::UMat>, std::unique_ptr<cv::UMat>> 
+	//				{ std::make_unique<cv::Mat>(color_matrix), std::make_unique<cv::UMat>(color_matrix_comp), std::make_unique<cv::UMat>(depth_matrix_comp)});
+	//	
+	//		}
+
+	//	}
+	//	});
+
+	//Main thread
+	while (output_stream_controller.should_receive_new_frames()) {
 		
-		while (output_stream_controller.should_receive_new_frames()) {
+		try {
 			rs2::frameset data;
 
 			if (pipe.poll_for_frames(&data)) {
@@ -51,70 +114,40 @@ int ServiceController::main() try {
 				//Align color and depth frame to each other
 				rs2::frameset aligned = align_to.process(processed);
 
-				processed_frames.enqueue(aligned);
-	
-			}
-		}
-		});
+				//Convert the realsense frame to OpenCV matrices
+				auto color_matrix = frame_to_mat(aligned.get_color_frame());
+				auto depth_matrix = depth_frame_to_meters(aligned.get_depth_frame());
 
-	rs2::frameset curr_frame;
+				//Crop the matrices to the same size
+				color_matrix = color_matrix(crop);
+				depth_matrix = depth_matrix(crop);
 
-	//RealSense Frame -> OpenCV Mat conversion thread
-	std::thread cv_translation_thread([&]() {
-		while (output_stream_controller.should_receive_new_frames()) {
+				//Compress the matrices
+				cv::UMat color_matrix_comp;
+				cv::UMat depth_matrix_comp;
+				cv::resize(color_matrix, color_matrix_comp, cv::Size(), COMP_SCALE, COMP_SCALE);
+				cv::resize(depth_matrix, depth_matrix_comp, cv::Size(), COMP_SCALE, COMP_SCALE);
 
-			//Check if new frame available from camera / recording
-			if (processed_frames.poll_for_frame(&curr_frame)) {
-
-				//Skip the frame if too many in the queue for object detection
-				if (mats.size() > 3) {
-					continue;
-				}
-
-					//Convert the realsense frame to OpenCV matrices
-					auto color_matrix = frame_to_mat(curr_frame.get_color_frame());
-					auto depth_matrix = depth_frame_to_meters(curr_frame.get_depth_frame());
-
-					//Crop the matrices to the same size
-					color_matrix = color_matrix(crop);
-					depth_matrix = depth_matrix(crop);
-
-					//Compress the matrices
-					cv::UMat color_matrix_comp;
-					cv::UMat depth_matrix_comp;
-					cv::resize(color_matrix, color_matrix_comp, cv::Size(), COMP_SCALE, COMP_SCALE);
-					cv::resize(depth_matrix, depth_matrix_comp, cv::Size(), COMP_SCALE, COMP_SCALE);
-
-					//Add converted matrices to the queue for object detection
-					mats.push(std::tuple<std::unique_ptr<cv::Mat>, std::unique_ptr<cv::UMat>, std::unique_ptr<cv::UMat>> 
-					{ std::make_unique<cv::Mat>(color_matrix), std::make_unique<cv::UMat>(color_matrix_comp), std::make_unique<cv::UMat>(depth_matrix_comp)});
-		
-			}
-
-		}
-		});
-
-	//Main thread
-	while (output_stream_controller.should_receive_new_frames()) {
-		
-		try {
+				//Add converted matrices to the queue for object detection
+				//mats.push(std::tuple<std::unique_ptr<cv::Mat>, std::unique_ptr<cv::UMat>, std::unique_ptr<cv::UMat>>
+				//{ std::make_unique<cv::Mat>(color_matrix), std::make_unique<cv::UMat>(color_matrix_comp), std::make_unique<cv::UMat>(depth_matrix_comp)});
 			//If no matrices ready, skip
-			if (mats.empty()) continue;
+	/*		if (mats.empty()) continue;*/
 		
-			//Check if the matrix in front of the queue fully written
-			if ((*(std::get<0>(mats.front()))).total() == crop.area())  {
+			////Check if the matrix in front of the queue fully written
+			//if ((*(std::get<0>(mats.front()))).total() == crop.area())  {
 
 				//Allow camera time to adjust exposition before starting to process - 15 frames
-				if (infer_frame_counter < 15) {
-					mats.pop();
-					infer_frame_counter++;
-					continue;
-				}
-				
+				//if (infer_frame_counter < 15) {
+				//	mats.pop();
+				//	infer_frame_counter++;
+				//	continue;
+				//}
+				//
 				//Retrieve current matrices from pointers
-				cv::Mat color_matrix = *(std::get<0>(mats.front()));
-				cv::UMat color_matrix_comp = *(std::get<1>(mats.front()));
-				cv::UMat depth_matrix_comp = *(std::get<2>(mats.front()));
+				//cv::Mat color_matrix = *(std::get<0>(mats.front()));
+				//cv::UMat color_matrix_comp = *(std::get<1>(mats.front()));
+				//cv::UMat depth_matrix_comp = *(std::get<2>(mats.front()));
 				SPDLOG_INFO("Retrieved matrices");
 
 				//Object tracking is updated every frame
@@ -129,7 +162,7 @@ int ServiceController::main() try {
 				SPDLOG_INFO("Inferred a frame {}", ++infer_frame_counter - 15 );
 
 				skipper = !skipper;
-				mats.pop();
+				//mats.pop();
 
 			}
 		}
