@@ -11,10 +11,10 @@ void ObjectTracker::update_all_trackers(std::vector<tracked_object> &objects, cv
 
 		for (unsigned int i = r.begin(); i < r.end(); i++) {
 		auto& object = objects[i];
-
+		object.second.lock = false;
 		bool update_success = update_tracker(object, color_matrix);
 		
-		if (object.second.no_rc_counter > 2 * TARGET_FPS) {
+		if (object.second.no_rc_counter > 3 * TARGET_FPS) {
 			free_ids.push(object.second.id);
 			objects.erase(objects.begin() + i);
 
@@ -35,6 +35,6 @@ bool ObjectTracker::update_tracker(tracked_object &object, cv::UMat& color_matri
 }
 
 cv::Ptr<cv::Tracker> ObjectTracker::create_tracker() {
-	return cv::TrackerMOSSE::create();
+	return cv::TrackerKCF::create();
 
 }

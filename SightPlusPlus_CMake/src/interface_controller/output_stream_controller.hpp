@@ -32,6 +32,6 @@ public:
 	void stream_color(cv::Mat& color_matrix, std::vector<tracked_object>& objects);
 	void stream_depth(cv::Mat& depth_matrix, std::vector<tracked_object>& objects);
 
-	cv::Scalar get_random_color();
+	static cv::Scalar get_random_color();
 
 };

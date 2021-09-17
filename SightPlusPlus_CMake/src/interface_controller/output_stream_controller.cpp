@@ -67,11 +67,10 @@ void OutputStreamController::stream(cv::Mat& color_matrix, cv::UMat& depth_matri
 void OutputStreamController::stream_color(cv::Mat& color_matrix, std::vector<tracked_object>& objects) {
 
 	for (auto& object : objects) {
-		cv::Scalar color = get_random_color();
 		std::string text = cv::format("human, %f m, id %d", object.second.distance, object.second.id);
-		cv::putText(color_matrix, text, cv::Point2f(object.second.bounding_box.x * (1.0 / COMP_SCALE), object.second.bounding_box.y * (1.0 / COMP_SCALE)), cv::FONT_HERSHEY_PLAIN, 1, color, 1);
+		cv::putText(color_matrix, text, cv::Point2f(object.second.bounding_box.x * (1.0 / COMP_SCALE), object.second.bounding_box.y * (1.0 / COMP_SCALE)), cv::FONT_HERSHEY_PLAIN, 2, object.second.color, 2);
 		cv::Rect2d bounding_box(object.second.bounding_box.x * (1.0 / COMP_SCALE), object.second.bounding_box.y * (1.0 / COMP_SCALE), object.second.bounding_box.width * (1.0 / COMP_SCALE), object.second.bounding_box.height * (1.0 / COMP_SCALE));
-		cv::rectangle(color_matrix, bounding_box, color, 1);
+		cv::rectangle(color_matrix, bounding_box, object.second.color, 2);
 	}
 
 	cv::imshow(color_output_window, color_matrix);

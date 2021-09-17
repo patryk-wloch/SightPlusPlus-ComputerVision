@@ -11,11 +11,13 @@ struct DetectionResult
 	cv::Rect2d bounding_box;
 	int age = 0;
 	int no_rc_counter = 0;
+	cv::Scalar color;
+	bool lock = false;
 };
 
 const float ALPHA = 0.3;
-const float COMP_SCALE = 0.5;
-const std::string PATH_TO_MODEL = "models/ssd300.xml";
+const float COMP_SCALE = 0.33;
+const std::string PATH_TO_MODEL = "models/ssd_mobilenet_v2_coco.xml";
 const std::string VINO_CONFIG = "GPU";
 const int DEC_FILTER = 2;
 const int SPAT_FILTER = 3;

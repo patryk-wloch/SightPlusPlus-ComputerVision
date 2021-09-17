@@ -110,22 +110,23 @@ int ServiceController::main() try {
 					infer_frame_counter++;
 					continue;
 				}
-
+				
 				//Retrieve current matrices from pointers
 				cv::Mat color_matrix = *(std::get<0>(mats.front()));
 				cv::UMat color_matrix_comp = *(std::get<1>(mats.front()));
 				cv::UMat depth_matrix_comp = *(std::get<2>(mats.front()));
+				SPDLOG_INFO("Retrieved matrices");
 
 				//Object tracking is updated every frame
 				object_tracker.update_all_trackers(objects, color_matrix_comp);
-		
+				SPDLOG_INFO("Updated all trackers");
 				//Object recognition is performed every second frame
-				if(!skipper) inference_controller.process_frames(color_matrix_comp, depth_matrix_comp);
-
+				inference_controller.process_frames(color_matrix_comp, depth_matrix_comp);
+				SPDLOG_INFO("Done ML on matrices");
 				//Send the results to output stream controller for displaying
 				output_stream_controller.stream(color_matrix, depth_matrix_comp, objects);
 
-				SPDLOG_INFO("Inferred a frame {}", ++infer_frame_counter);
+				SPDLOG_INFO("Inferred a frame {}", ++infer_frame_counter - 15 );
 
 				skipper = !skipper;
 				mats.pop();

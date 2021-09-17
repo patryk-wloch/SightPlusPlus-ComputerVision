@@ -63,5 +63,7 @@ public:
 	double get_distance(cv::UMat& object);
 
 	float calculate_overlap(DetectionResult& object_tracked, DetectionResult& object_detected);
+
+	cv::Scalar get_random_color();
 	};
 

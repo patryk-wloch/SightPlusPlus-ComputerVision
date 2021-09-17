@@ -101,7 +101,15 @@ void InferenceController::prepare_queue() {
 void InferenceController::process_frames(const cv::UMat& color_matrix, const cv::UMat& depth_matrix) {
 
 	try {
-		SPDLOG_INFO("RECEIVED NEW FRAME");
+		for (auto& object1 : objects) {
+			for (auto& object2 : objects) {
+				if (calculate_overlap(object1.second, object2.second) > 0.3 && object1.second.id != object2.second.id) {
+					object1.second.lock = true;
+					object2.second.lock = true;
+				}
+			}
+		}
+		//SPDLOG_INFO("RECEIVED NEW FRAME");
 		//Resize input matrix to match network specification
 		cv::Mat img_input;
 		cv::resize(color_matrix, img_input, cv::Size(input_height, input_width));
@@ -155,7 +163,7 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 
 		tbb::concurrent_vector<DetectionResult> candidate_objects;
 
-		SPDLOG_INFO("PROCESSING OUTPUTS FROM IE");
+		//SPDLOG_INFO("PROCESSING OUTPUTS FROM IE");
 		tbb::parallel_for(tbb::blocked_range<int>(0, max_proposals), [&](tbb::blocked_range<int> r) {
 
 			for (unsigned int detection_index = r.begin(); detection_index < r.end(); detection_index++) {
@@ -165,12 +173,12 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 
 				int object_label = detections[detection_index * object_size + 1];
 				float confidence = detections[detection_index * object_size + 2];
-				int xmin = (int)(0.95 * detections[detection_index * object_size + 3] * color_matrix.cols);
-				int ymin = (int)(0.95 * detections[detection_index * object_size + 4] * color_matrix.rows);
-				int xmax = (int)(1.05 * detections[detection_index * object_size + 5] * color_matrix.cols);
-				int ymax = (int)(1.05 * detections[detection_index * object_size + 6] * color_matrix.rows);
+				int xmin = (int)(detections[detection_index * object_size + 3] * color_matrix.cols);
+				int ymin = (int)(detections[detection_index * object_size + 4] * color_matrix.rows);
+				int xmax = (int)(detections[detection_index * object_size + 5] * color_matrix.cols);
+				int ymax = (int)(detections[detection_index * object_size + 6] * color_matrix.rows);
 
-				if (confidence > 0.5 && object_label == 15) {
+				if (confidence > 0.5 && object_label == 1) {
 
 					xmin = std::max(0, xmin);
 					ymin = std::max(0, ymin);
@@ -184,7 +192,6 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 
 					double distance = DEPTH ? get_distance(object_depth) : 0;
 
-
 					DetectionResult current_detection = { object_label, distance, distance, 0, object };
 
 					candidate_objects.push_back(current_detection);
@@ -192,7 +199,7 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 				}
 			}
 			});
-		SPDLOG_INFO("PROCESSED OUTPUTS FROM IE");
+		//SPDLOG_INFO("PROCESSED OUTPUTS FROM IE");
 
 		std::vector<tracked_object> new_objects;
 
@@ -204,17 +211,17 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 					for (auto& tracked_object : objects) {
 						float overlap = calculate_overlap(tracked_object.second, candidate_object);
 
-						if (overlap > 0.3) {
+						if (overlap > 0.35) {
 							check_tracking = true;
 
-							if (overlap < 0.75 || tracked_object.second.no_rc_counter > TARGET_FPS) {
+							if (tracked_object.second.lock == false && overlap < 0.7 ) {
 								tracked_object.first = ObjectTracker::create_tracker();
 								tracked_object.first->init(color_matrix, candidate_object.bounding_box);
 
 							}
 
 							//EMA distance stabilisation
-							tracked_object.second.distance = (float)(1 - ALPHA) * tracked_object.second.distance + ALPHA * candidate_object.distance;
+							tracked_object.second.distance = (float)(1.f - ALPHA) * tracked_object.second.distance + ALPHA * candidate_object.distance;
 							tracked_object.second.no_rc_counter = 0;
 							break;
 
@@ -222,6 +229,8 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 
 					}
 					if (!check_tracking) {
+						candidate_object.color = get_random_color();
+						
 						free_ids.try_pop(candidate_object.id);
 						auto tracker = ObjectTracker::create_tracker();
 						tracker->init(color_matrix, candidate_object.bounding_box);
@@ -237,7 +246,7 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 		for (auto &object : new_objects) {
 			objects.push_back(object);
 		}
-		SPDLOG_INFO("PROCESSED CANDIDATE OBJECTS");
+		//SPDLOG_INFO("PROCESSED CANDIDATE OBJECTS");
 
 	}
 	catch (const std::exception& e) {
@@ -287,4 +296,13 @@ float InferenceController::calculate_overlap(DetectionResult& object_tracked, De
 	float overlap = intersection_area / reference_area;
 
 	return overlap;
+}
+
+cv::Scalar InferenceController::get_random_color() {
+	srand(time(0));
+
+	int r = rand() % 255;
+	int g = rand() % 255;
+	int b = rand() % 255;
+	return cv::Scalar(r, g, b, 255);
 }
