@@ -35,6 +35,6 @@ bool ObjectTracker::update_tracker(tracked_object &object, cv::UMat& color_matri
 }
 
 cv::Ptr<cv::Tracker> ObjectTracker::create_tracker() {
-	return cv::TrackerMOSSE::create();
+	return cv::TrackerKCF::create();
 
 }

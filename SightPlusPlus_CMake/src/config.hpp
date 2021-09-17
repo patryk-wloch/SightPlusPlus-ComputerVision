@@ -16,14 +16,14 @@ struct DetectionResult
 };
 
 const float ALPHA = 0.3;
-const float COMP_SCALE = 0.5;
+const float COMP_SCALE = 1.0;
 const std::string PATH_TO_MODEL = "models/ssd_mobilenet_v2_coco.xml";
 const std::string VINO_CONFIG = "GPU";
 const int DEC_FILTER = 2;
 const int SPAT_FILTER = 3;
 const int HOLE_FILTER = 1;
 const int MAX_OBJECT_COUNT = 20;
-const int TARGET_FPS = 30;
+const int TARGET_FPS = 5;
 const bool DEPTH = true;
 const int CAMERA_FPS = 30;
 const float WH_RATIO = 1.3333;
