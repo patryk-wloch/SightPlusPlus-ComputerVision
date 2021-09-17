@@ -6,10 +6,10 @@
 
 void ObjectTracker::update_all_trackers(std::vector<tracked_object> &objects, cv::UMat & color_matrix) {
 
-	tbb::parallel_for(tbb::blocked_range<int>(0, objects.size()), [&](tbb::blocked_range<int> r) {
+	//tbb::parallel_for(tbb::blocked_range<int>(0, objects.size()), [&](tbb::blocked_range<int> r) {
 
 
-		for (unsigned int i = r.begin(); i < r.end(); i++) {
+		for (unsigned int i = 0; i < objects.size(); i++) {
 		auto& object = objects[i];
 		object.second.lock = false;
 		bool update_success = update_tracker(object, color_matrix);
@@ -25,7 +25,7 @@ void ObjectTracker::update_all_trackers(std::vector<tracked_object> &objects, cv
 		}
 
 	}
-		});
+		//});
 }
 
 bool ObjectTracker::update_tracker(tracked_object &object, cv::UMat& color_matrix) {
@@ -35,6 +35,6 @@ bool ObjectTracker::update_tracker(tracked_object &object, cv::UMat& color_matri
 }
 
 cv::Ptr<cv::Tracker> ObjectTracker::create_tracker() {
-	return cv::TrackerKCF::create();
+	return cv::TrackerMOSSE::create();
 
 }
