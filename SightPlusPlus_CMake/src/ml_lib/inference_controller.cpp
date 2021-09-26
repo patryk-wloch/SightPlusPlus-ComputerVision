@@ -181,7 +181,7 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 		// Process possible detections concurrently
 		tbb::parallel_for(tbb::blocked_range<int>(0, max_proposals), [&](tbb::blocked_range<int> r) {
 
-			for (unsigned int detection_index = 0; detection_index < max_proposals; detection_index++) {
+			for (unsigned int detection_index = r.begin(); detection_index < r.end(); detection_index++) {
 				float image_id = detections[detection_index * object_size + 0];
 
 				if (image_id < 0) break;
@@ -215,7 +215,7 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 
 				}
 			}
-			//});
+			});
 		//SPDLOG_INFO("PROCESSED OUTPUTS FROM IE");
 
 		std::vector<tracked_object> new_objects;
