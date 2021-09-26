@@ -113,9 +113,9 @@ int ServiceController::main() try {
 				}
 
 				//Retrieve current matrices from pointers
-				cv::Mat color_matrix = *(std::get<0>(mats.front()));
-				cv::UMat color_matrix_comp = *(std::get<1>(mats.front()));
-				cv::UMat depth_matrix_comp = *(std::get<2>(mats.front()));
+				//cv::Mat color_matrix = *(std::get<0>(mats.front()));
+				//cv::UMat color_matrix_comp = *(std::get<1>(mats.front()));
+				//cv::UMat depth_matrix_comp = *(std::get<2>(mats.front()));
 				SPDLOG_INFO("Retrieved matrices");
 
 				//Object tracking is updated every frame

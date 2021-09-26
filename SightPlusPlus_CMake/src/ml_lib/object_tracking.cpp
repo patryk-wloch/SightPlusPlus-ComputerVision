@@ -82,7 +82,7 @@ void ObjectTracker::update_all_trackers(std::vector<tracked_object> &objects, cv
 		}
 
 	}
-		});
+		//});
 }
 
 bool ObjectTracker::update_tracker(tracked_object &object, cv::UMat& color_matrix) {
