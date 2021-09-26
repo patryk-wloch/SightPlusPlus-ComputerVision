@@ -1,5 +1,14 @@
  // License: Apache 2.0. See LICENSE file in root directory.
- // Copyright(c) 2020 Sight++. All Rights Reserved.
+ // Copyright(c) 2021 Sight++. All Rights Reserved.
+
+// The OpenVINO interface in this file has been loosely inspired by some of the public OpenVINO code samples,
+// e.g., https://github.com/IntelRealSense/librealsense/tree/master/wrappers/openvino
+// or https://github.com/openvinotoolkit/openvino/blob/master/inference-engine/samples/hello_classification/main.cpp
+// and https://github.com/openvinotoolkit/openvino/blob/master/inference-engine/samples/object_detection_sample_ssd/main.cpp
+// but has been rewritten to account for integration with object tracking and depth measurements, support of 
+// various types of neural networks, utilisation of, and safety with respect to, concurrency, and other crucial aspects. 
+// As such, the final result bears little resemblance to any pre-existent publicly available code.
+
 
 #include "inference_controller.hpp"
 
@@ -12,6 +21,7 @@ bool InferenceController::start() {
 		//Initialise OpenVINO Inference Engine
 		InferenceEngine::Core core;
 
+		//Option for deploying computation on both GPU and CPU
 		if (config == "MULTI") {
 			core.SetConfig({ {"MULTI_DEVICE_PRIORITIES","GPU,CPU"} }, "MULTI");
 		}
@@ -34,9 +44,10 @@ bool InferenceController::start() {
 				input_data->setPrecision(InferenceEngine::Precision::U8);
 
 			}
+
+			// Added suppport for hybrid networks with R-FCN/R-CNN input format
 			else if (item.second->getInputData()->getTensorDesc().getDims().size() == 2) {
 				input_info_layer = item.first;
-
 				item.second->setPrecision(InferenceEngine::Precision::FP32);
 			}
 		}
@@ -44,10 +55,13 @@ bool InferenceController::start() {
 		//Get basic info about the network's output
 		InferenceEngine::OutputsDataMap output_info = network_main.getOutputsInfo();
 		auto output_data = output_info.begin()->second;
+
 		//Set output precision - 32-bit floating point is chosen as it's supported on all architectures
 		output_data->setPrecision(InferenceEngine::Precision::FP32);
 		output_layer = output_info.begin()->first;
 
+		//Find a post-processing DetectionOutput layer if exists, from: 
+		//https://github.com/openvinotoolkit/openvino/blob/master/inference-engine/samples/object_detection_sample_ssd/main.cpp
 		if (auto ngraph_function = network_main.getFunction()) {
 			for (const auto& out : output_info) {
 				for (const auto& op : ngraph_function->get_ops()) {
@@ -62,7 +76,7 @@ bool InferenceController::start() {
 
 		exec_network_main = core.LoadNetwork(network_main, config);
 
-		SPDLOG_INFO("Loaded network {} into Inference Engine", PATH_TO_MODEL);
+		SPDLOG_INFO("Loaded network {} into Inference Engine", path_to_model);
 
 		//Create test Inference Request instance;
 		InferenceEngine::InferRequest infer_request = exec_network_main.CreateInferRequest();
@@ -79,12 +93,7 @@ bool InferenceController::start() {
 		max_proposals = output_dimensions.at(2);
 		object_size = output_dimensions.at(3);
 
-		SPDLOG_INFO("{}, {}, {}, {}, {}", channels_count, input_height, input_width, max_proposals, object_size);
-
-		//Prepare input BLOB and corresponding buffer space in memory
-
-
-		SPDLOG_INFO("Prepared instance of Inference Request");
+		SPDLOG_INFO("Prepared test instance of Inference Request");
 		return true;
 	}
 	catch (const std::exception& e) {
@@ -101,15 +110,16 @@ void InferenceController::prepare_queue() {
 void InferenceController::process_frames(const cv::UMat& color_matrix, const cv::UMat& depth_matrix) {
 
 	try {
+		//Check if live objects overlap, if yes then lock them to prevent restarting tracking information
 		for (auto& object1 : objects) {
 			for (auto& object2 : objects) {
-				if (calculate_overlap(object1.second, object2.second) > 0.3 && object1.second.id != object2.second.id) {
+				if (calculate_overlap(object1.second, object2.second) > 0.2 && object1.second.id != object2.second.id) {
 					object1.second.lock = true;
 					object2.second.lock = true;
 				}
 			}
 		}
-		//SPDLOG_INFO("RECEIVED NEW FRAME");
+
 		//Resize input matrix to match network specification
 		cv::Mat img_input;
 		cv::resize(color_matrix, img_input, cv::Size(input_height, input_width));
@@ -124,9 +134,11 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 		const auto output_blob = infer_request.GetBlob(output_layer);
 		output_buffer = InferenceEngine::as<InferenceEngine::MemoryBlob>(output_blob);
 
+		//Get write access to input buffer
 		auto input_access_holder = input_buffer->wmap();
 		unsigned char* input_data = input_access_holder.as<unsigned char*>();
 
+		//Fill input buffer with image data
 		for (size_t pixel = 0; pixel < image_size; ++pixel)
 		{
 			for (size_t ch = 0; ch < channels_count; ++ch)
@@ -135,7 +147,8 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 			}
 		}
 
-
+		// Adaptation for R-CNN and R-FCN networks, inspired by
+		// https://github.com/openvinotoolkit/openvino/blob/master/inference-engine/samples/object_detection_sample_ssd/main.cpp
 		if (input_info_layer != "") {
 			const auto input_info_blob = infer_request.GetBlob(input_info_layer);
 			input_info_buffer = InferenceEngine::as<InferenceEngine::MemoryBlob>(input_info_blob);
@@ -154,16 +167,18 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 
 		}
 
-
+		//Infer!
 		infer_request.Infer();
 
-
+		// Get read access to output buffer
 		auto output_access_holder = output_buffer->rmap();
 		const float* detections = output_access_holder.as<InferenceEngine::PrecisionTrait<InferenceEngine::Precision::FP32>::value_type*>();
 
 		tbb::concurrent_vector<DetectionResult> candidate_objects;
 
-		//SPDLOG_INFO("PROCESSING OUTPUTS FROM IE");
+		SPDLOG_INFO("PROCESSING OUTPUTS FROM IE");
+
+		// Process possible detections concurrently
 		tbb::parallel_for(tbb::blocked_range<int>(0, max_proposals), [&](tbb::blocked_range<int> r) {
 
 			for (unsigned int detection_index = r.begin(); detection_index < r.end(); detection_index++) {
@@ -178,6 +193,7 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 				int xmax = (int)(detections[detection_index * object_size + 5] * color_matrix.cols);
 				int ymax = (int)(detections[detection_index * object_size + 6] * color_matrix.rows);
 
+				// Currently set to only detect objects with label 1 - human, can be changed as required
 				if (confidence > 0.5 && object_label == 1) {
 
 					xmin = std::max(0, xmin);
@@ -194,6 +210,7 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 
 					DetectionResult current_detection = { object_label, distance, distance, 0, object };
 
+					// Add provisional object to the candidate objects vector
 					candidate_objects.push_back(current_detection);
 
 				}
@@ -203,7 +220,7 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 
 		std::vector<tracked_object> new_objects;
 
-
+		// Check all candidate objects against existent live objects to remove duplicates
 		for (auto & candidate_object : candidate_objects) {
 
 					bool check_tracking = false;
@@ -211,29 +228,31 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 					for (auto& tracked_object : objects) {
 						float overlap = calculate_overlap(tracked_object.second, candidate_object);
 
-						if (overlap > 0.35) {
+						if (overlap > 0.25) {
 							check_tracking = true;
 
-							if (tracked_object.second.lock == false && overlap < 0.7 ) {
+							// If overlap between 0.35 and 0.7 assume it's the same object, but restart tracker
+							if (tracked_object.second.lock == false && overlap < 0.7) {
 								tracked_object.first = ObjectTracker::create_tracker();
 								tracked_object.first->init(color_matrix, candidate_object.bounding_box);
 
 							}
 
-							//EMA distance stabilisation
-							tracked_object.second.distance = (float)(1.f - ALPHA) * tracked_object.second.distance + ALPHA * candidate_object.distance;
 							tracked_object.second.no_rc_counter = 0;
 							break;
 
 						}
 
 					}
+
+					// If no existent live object found, create a new object
 					if (!check_tracking) {
 						candidate_object.color = get_random_color();
-						
+						 
 						free_ids.try_pop(candidate_object.id);
 						auto tracker = ObjectTracker::create_tracker();
 						tracker->init(color_matrix, candidate_object.bounding_box);
+						candidate_object.first_bounding_box = candidate_object.bounding_box;
 						new_objects.push_back(tracked_object(tracker, candidate_object));
 					}
 
@@ -241,7 +260,6 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 
 				}
 
-		
 
 		for (auto &object : new_objects) {
 			objects.push_back(object);
@@ -255,47 +273,18 @@ void InferenceController::process_frames(const cv::UMat& color_matrix, const cv:
 	}
 }
 
-double InferenceController::get_distance(cv::UMat& object) {
-
-	if (!object.isContinuous()) object = object.clone();
-	object = object.reshape(0, 1);
-	cv::Mat label, centers;
-	cv::kmeans(object, 2, label, cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 50, 0.1), 1, cv::KMEANS_PP_CENTERS, centers);
-
-	float* p = label.ptr<float>();
-	int group_zero = 0;
-	int group_one = 0;
-	for (size_t i = 0; i < label.rows; i++) {
-		int center_id = label.at<int>(i);
-		if (center_id == 0) {
-			group_zero++;
-
-		}
-		else if (center_id == 1) {
-			group_one++;
-		}
-		p[i] = centers.at<float>(center_id);
-	}
-	float distance = 0;
-	if (group_zero > group_one) {
-		distance = centers.at<float>(0);
-	}
-	else {
-		distance = centers.at<float>(1);
-	}
-	return distance;
-
-}
 
 float InferenceController::calculate_overlap(DetectionResult& object_tracked, DetectionResult& object_detected) {
 
 	float intersection_area = (object_tracked.bounding_box & object_detected.bounding_box).area();
 
 	float reference_area = object_tracked.bounding_box.area() + object_detected.bounding_box.area() - intersection_area;
+	float overlap1 = ((object_tracked.bounding_box & object_detected.bounding_box) & object_tracked.bounding_box).area() / object_tracked.bounding_box.area();
+	float overlap2 = ((object_tracked.bounding_box & object_detected.bounding_box) & object_detected.bounding_box).area() / object_detected.bounding_box.area();
 
-	float overlap = intersection_area / reference_area;
+	float overlap3 = intersection_area / reference_area;
 
-	return overlap;
+	return std::max({ overlap1, overlap2, overlap3 });
 }
 
 cv::Scalar InferenceController::get_random_color() {

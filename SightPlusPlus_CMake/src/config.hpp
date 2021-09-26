@@ -1,6 +1,8 @@
 
 #pragma once
 #include <opencv2/tracking/tracking.hpp>
+#include <librealsense2/rs.hpp>
+#include <librealsense2/rsutil.h>
 
 struct DetectionResult
 {
@@ -13,12 +15,12 @@ struct DetectionResult
 	int no_rc_counter = 0;
 	cv::Scalar color;
 	bool lock = false;
+	cv::Rect2d first_bounding_box;
+	double speed = 0;
 };
 
-const float ALPHA = 0.3;
+const float ALPHA = 0.1;
 const float COMP_SCALE = 0.33;
-const std::string PATH_TO_MODEL = "models/ssd_mobilenet_v2_coco.xml";
-const std::string VINO_CONFIG = "GPU";
 const int DEC_FILTER = 2;
 const int SPAT_FILTER = 3;
 const int HOLE_FILTER = 1;
@@ -30,4 +32,4 @@ const float WH_RATIO = 1.3333;
 
 typedef std::pair <cv::Ptr<cv::Tracker>, DetectionResult> tracked_object;
 
-	
+

@@ -15,6 +15,8 @@
 #include "ml_lib/inference_controller.hpp"
 #include "config.hpp"
 
+// Most of the code in this file is taken from Gen 1 Sight++, apart from changes to initiate OpenVINO API at startup
+
 int main(int argc, char** argv)
 {
 #define _SOLUTIONDIR = R"($(SolutionDir))"
@@ -26,29 +28,14 @@ int main(int argc, char** argv)
 	auto stream_color = false;
 	auto port = 7979;
 	auto theme = 0;
+	std::string path_to_model = "models/ssd_mobilenet_v2_coco.xml";
+	std::string vino_config = "GPU";
+	std::string tracker = "MOSSE";
 
 	setup_logging();
 
 	SPDLOG_INFO("Starting");
 
-	/// <summary>
-	/// This section is to capture the flags from the user. 
-	/// Example flags are: 
-	/// 1) realsense		: This is used run the system from the camera.
-	/// 2) -rec hello.bag	: This is used to record the current input into a file with the name following the flag.
-	/// 3) -play hello.bag  : This is used to play the file from the file following the flag.
-	/// 4) -depth			: This is used to show the depth stream in a window
-	/// 5) -color			: This is used to show the color stream in a window
-	/// 6) -port			: This is used to select the port the websocket server runs on, default is 7979
-	/// 7) -caffe no_bn		: This is used to import the caffe-based network named no_bn.caffemodel etc.
-	/// 8) -yolo yolo		: This is used to import the darknet-based network (YoloV3).
-	/// 9) -outdoors		: This is used to set up object detection networks, frame resolution and the prioritiser for outdoors environment.
-	/// 10) -indoors		: This is used to set up object detection networks, frame resolution and the prioritiser for indoors environment.
-	/// 11) -covid			: This is used to set up object detection networks, frame resolution and the prioritiser for Outdoors environment and uses a prioritiser that enforces social distancing.
-	/// <summary>
-	/// <param name="argc"></param>
-	/// <param name="argv"></param>
-	/// <returns></returns>
 	if (argc > 1)
 	{
 		SPDLOG_INFO("Flags found");
@@ -59,7 +46,7 @@ int main(int argc, char** argv)
 			std::string next_arg = argv[i];
 
 			SPDLOG_INFO("Next flag is {}", next_arg);
-			if (next_arg.compare("realsense") == 0)
+			if (next_arg.compare("-realsense") == 0)
 			{
 				SPDLOG_INFO("Streaming from camera");
 				cfg.enable_stream(RS2_STREAM_DEPTH, 848, 480, RS2_FORMAT_Z16, CAMERA_FPS);
@@ -137,49 +124,36 @@ int main(int argc, char** argv)
 
 			if (next_arg.compare("-caffe") == 0 && (i + 1) < argc)
 			{
-				try
-				{
-
-				}
-				catch (const std::exception& exception)
-				{
-					SPDLOG_CRITICAL("Error with loading caffe-based network from file: {}", exception.what());
-				}
+				path_to_model = argv[++i];
 			}
+
 			else if (next_arg.compare("-caffe") == 0 && !((i + 1) < argc))
 			{
-				SPDLOG_ERROR("Missing flag/argument for loading the caffe-based network");
+				SPDLOG_ERROR("Missing argument for loading the network");
 				continue;
 			}
 
-			if (next_arg.compare("-yolo") == 0 && (i + 1) < argc)
+			if (next_arg.compare("-vino") == 0 && (i + 1) < argc)
 			{
-				try
-				{
-
-				}
-				catch (const std::exception& exception)
-				{
-					SPDLOG_CRITICAL("Error with loading darknet-based yolo network from file: {}", exception.what());
-				}
+				vino_config = argv[++i];
 			}
-			else if (next_arg.compare("-yolo") == 0 && !((i + 1) < argc))
+			else if (next_arg.compare("-vino") == 0 && !((i + 1) < argc)) 
 			{
-				SPDLOG_ERROR("Missing flag/argument for loading the darknet-based yolo network");
+				SPDLOG_ERROR("Missing argument for the -vino flag");
 				continue;
 			}
 
+			if (next_arg.compare("-KCF") == 0) {
+				tracker = "KCF";
+			}
 		
 		}
 	}
-
-
-
 	
 	else
 	{
-		SPDLOG_INFO("Using default recording");
-		cfg.enable_device_from_file(".\\recordings\\outdoors.bag");
+		SPDLOG_ERROR("Missing required runtime flags");
+		return EXIT_FAILURE;
 	}
 
 	auto config = pipe.start(cfg);
@@ -191,18 +165,17 @@ int main(int argc, char** argv)
 		SPDLOG_INFO("{}: {}x{}", profile.stream_name(), profile.width(), profile.height());
 	}
 
-	InferenceController inference_controller(PATH_TO_MODEL, VINO_CONFIG);
+	InferenceController inference_controller(path_to_model, vino_config);
 	if (!inference_controller.start()) return EXIT_FAILURE;
 
-	ObjectTracker object_tracker(inference_controller.free_ids);
 
 	auto profile = config.get_stream(RS2_STREAM_COLOR).as<rs2::video_stream_profile>();
-
-
-	// Todo: load prio model from flag
+	auto intr = profile.get_intrinsics();
+	ObjectTracker object_tracker(inference_controller.free_ids, intr, tracker);
 
 	SPDLOG_INFO("Setting up output API and API users");
 	ApiController api;
+
 	//ApiWebSocketImpl websocket_api_user(port, Priority::HIGH);
 	//api.add_user(websocket_api_user);
 

@@ -19,7 +19,7 @@ class ServiceController {
 	ApiController api_controller;
 	OutputStreamController output_stream_controller;
 	rs2::video_stream_profile profile;
-	ObjectTracker object_tracker;
+	ObjectTracker object_tracker; 
 	cv::Rect crop;
 
 	int process_frame_counter = 0;
@@ -37,8 +37,6 @@ class ServiceController {
 
 	rs2::frame_queue processed_frames;
 
-	bool skipper = false;
-
 	//References to objects in ML controller instance
 	std::vector<tracked_object>& objects = inference_controller.objects;
 	tbb::concurrent_queue<int>& free_ids = inference_controller.free_ids;
@@ -52,17 +50,8 @@ public:
 		rs2::pipeline& pipe, InferenceController& ml_controller, ApiController& api_controller, 
 		OutputStreamController output_controller, const rs2::video_stream_profile& profile, ObjectTracker object_tracker);
 
-	/// <summary>
-	/// Main program loop. Receives and processes frames.
-	/// </summary>
-	/// <returns>Program exit code</returns>
 	int main();
 
-	/// <summary>
-	/// Create a correctly sized cropped rectangle.
-	/// Based on rs-dnn example.
-	/// </summary>
-	/// <param name="profile">Stream Profile containing width and height properties.</param>
-	/// <returns></returns>
+	// From Sight++ Gen 1
 	cv::Rect create_rect(const rs2::video_stream_profile& profile) const;
 };

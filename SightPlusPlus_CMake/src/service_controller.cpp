@@ -33,7 +33,7 @@ int ServiceController::main() try {
 
 	//Camera interface and frame processing thread
 	std::thread video_thread([&]() {
-		
+
 		while (output_stream_controller.should_receive_new_frames()) {
 			rs2::frameset data;
 
@@ -52,7 +52,7 @@ int ServiceController::main() try {
 				rs2::frameset aligned = align_to.process(processed);
 
 				processed_frames.enqueue(aligned);
-	
+
 			}
 		}
 		});
@@ -71,38 +71,39 @@ int ServiceController::main() try {
 					continue;
 				}
 
-					//Convert the realsense frame to OpenCV matrices
-					auto color_matrix = frame_to_mat(curr_frame.get_color_frame());
-					auto depth_matrix = depth_frame_to_meters(curr_frame.get_depth_frame());
+				//Convert the realsense frame to OpenCV matrices
+				auto color_matrix = frame_to_mat(curr_frame.get_color_frame());
+				auto depth_matrix = depth_frame_to_meters(curr_frame.get_depth_frame());
 
-					//Crop the matrices to the same size
-					color_matrix = color_matrix(crop);
-					depth_matrix = depth_matrix(crop);
+				//Crop the matrices to the same size
+				color_matrix = color_matrix(crop);
+				depth_matrix = depth_matrix(crop);
 
-					//Compress the matrices
-					cv::UMat color_matrix_comp;
-					cv::UMat depth_matrix_comp;
-					cv::resize(color_matrix, color_matrix_comp, cv::Size(), COMP_SCALE, COMP_SCALE);
-					cv::resize(depth_matrix, depth_matrix_comp, cv::Size(), COMP_SCALE, COMP_SCALE);
+				//Compress the matrices
+				cv::UMat color_matrix_comp;
+				cv::UMat depth_matrix_comp;
+				cv::resize(color_matrix, color_matrix_comp, cv::Size(), COMP_SCALE, COMP_SCALE);
+				cv::resize(depth_matrix, depth_matrix_comp, cv::Size(), COMP_SCALE, COMP_SCALE);
 
-					//Add converted matrices to the queue for object detection
-					mats.push(std::tuple<std::unique_ptr<cv::Mat>, std::unique_ptr<cv::UMat>, std::unique_ptr<cv::UMat>> 
-					{ std::make_unique<cv::Mat>(color_matrix), std::make_unique<cv::UMat>(color_matrix_comp), std::make_unique<cv::UMat>(depth_matrix_comp)});
-		
+				//Add converted matrices to the queue for object detection
+				mats.push(std::tuple<std::unique_ptr<cv::Mat>, std::unique_ptr<cv::UMat>, std::unique_ptr<cv::UMat>>
+				{ std::make_unique<cv::Mat>(color_matrix), std::make_unique<cv::UMat>(color_matrix_comp), std::make_unique<cv::UMat>(depth_matrix_comp)});
+
 			}
 
 		}
 		});
 
+	
 	//Main thread
 	while (output_stream_controller.should_receive_new_frames()) {
-		
+
 		try {
 			//If no matrices ready, skip
 			if (mats.empty()) continue;
-		
+
 			//Check if the matrix in front of the queue fully written
-			if ((*(std::get<0>(mats.front()))).total() == crop.area())  {
+			if ((*(std::get<0>(mats.front()))).total() == crop.area()) {
 
 				//Allow camera time to adjust exposition before starting to process - 15 frames
 				if (infer_frame_counter < 15) {
@@ -110,7 +111,7 @@ int ServiceController::main() try {
 					infer_frame_counter++;
 					continue;
 				}
-				
+
 				//Retrieve current matrices from pointers
 				cv::Mat color_matrix = *(std::get<0>(mats.front()));
 				cv::UMat color_matrix_comp = *(std::get<1>(mats.front()));
@@ -118,7 +119,7 @@ int ServiceController::main() try {
 				SPDLOG_INFO("Retrieved matrices");
 
 				//Object tracking is updated every frame
-				object_tracker.update_all_trackers(objects, color_matrix_comp);
+				object_tracker.update_all_trackers(objects, color_matrix_comp, depth_matrix_comp);
 				SPDLOG_INFO("Updated all trackers");
 				//Object recognition is performed every second frame
 				inference_controller.process_frames(color_matrix_comp, depth_matrix_comp);
@@ -126,20 +127,22 @@ int ServiceController::main() try {
 				//Send the results to output stream controller for displaying
 				output_stream_controller.stream(color_matrix, depth_matrix_comp, objects);
 
-				SPDLOG_INFO("Inferred a frame {}", ++infer_frame_counter - 15 );
+				SPDLOG_INFO("Inferred a frame {}", ++infer_frame_counter - 15);
 
-				skipper = !skipper;
+
+
 				mats.pop();
 
 			}
 		}
 		catch (const std::exception& e) {
 			SPDLOG_ERROR(e.what());
+			return EXIT_FAILURE;
 		}
 	}
 		return EXIT_SUCCESS;
-	}
-
+	
+}
 
 catch (const rs2::error& e)
 {
@@ -152,6 +155,7 @@ catch (const std::exception& e)
 	return EXIT_FAILURE;
 }
 
+// From Sight++ Gen 1
 cv::Rect ServiceController::create_rect(const rs2::video_stream_profile& profile) const
 {
 	cv::Size crop_size;

@@ -90,3 +90,34 @@ inline void setup_logging()
 
 }
 
+static double get_distance(cv::UMat& object) {
+
+    if (!object.isContinuous()) object = object.clone();
+    object = object.reshape(0, 1);
+    cv::Mat label, centers;
+    cv::kmeans(object, 2, label, cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 50, 0.1), 1, cv::KMEANS_PP_CENTERS, centers);
+
+    float* p = label.ptr<float>();
+    int group_zero = 0;
+    int group_one = 0;
+    for (size_t i = 0; i < label.rows; i++) {
+        int center_id = label.at<int>(i);
+        if (center_id == 0) {
+            group_zero++;
+
+        }
+        else if (center_id == 1) {
+            group_one++;
+        }
+        p[i] = centers.at<float>(center_id);
+    }
+    float distance = 0;
+    if (group_zero > group_one) {
+        distance = centers.at<float>(0);
+    }
+    else {
+        distance = centers.at<float>(1);
+    }
+    return distance;
+
+}

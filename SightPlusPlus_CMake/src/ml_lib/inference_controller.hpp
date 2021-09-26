@@ -17,12 +17,7 @@
 #include "../config.hpp"
 #include "object_tracking.hpp"
 
-/// <summary>
-/// This class is designed as the object to control all object recognition networks and define corresponding functions 
-/// </summary>
-/// 
-/// 
-/// 
+// Class controlling all object detection and recognition actions
 
 class InferenceController {
 
@@ -55,12 +50,10 @@ public:
 
 	InferenceController(const std::string& path_to_model, const std::string& config);
 
-
 	bool start();
 	void prepare_queue();
-	void process_frames(const cv::UMat& color_matrix, const cv::UMat& depth_matrix);
 
-	double get_distance(cv::UMat& object);
+	void process_frames(const cv::UMat& color_matrix, const cv::UMat& depth_matrix);
 
 	float calculate_overlap(DetectionResult& object_tracked, DetectionResult& object_detected);
 
