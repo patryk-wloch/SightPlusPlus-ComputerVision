@@ -99,5 +99,5 @@ cv::Scalar OutputStreamController::get_random_color() {
 	int r = rand() % 255;
 	int g = rand() % 255;
 	int b = rand() % 255;
-	return cv::Scalar(r, g, b, 255);
+	return cv::Scalar(b, g, r, 255);
 }

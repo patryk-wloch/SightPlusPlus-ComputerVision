@@ -7,7 +7,9 @@
 #include <ctime>
 
 #include "api_user_interface.hpp"
+ 
 
+// Legacy code - Sight++ Gen 1
 class ApiController
 {
 	std::vector<ApiUserInterface*> api_users_;

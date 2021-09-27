@@ -8,6 +8,8 @@
 #include <spdlog/spdlog.h>
 #include <tbb/parallel_for_each.h>
 
+// Legacy code - Sight++ Gen 1
+
 void ApiController::add_user(ApiUserInterface& user)
 {
 	api_users_.push_back(&user);

@@ -3,7 +3,7 @@
 
 #pragma once
 
-
+// Legacy Code - Sight++ Gen 1
 /// <summary>
 /// Interface that is used to send items to output interfaces.
 /// </summary>

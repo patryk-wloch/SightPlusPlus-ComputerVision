@@ -8,9 +8,8 @@
 #include <websocketpp/server.hpp>
 #include "spdlog/spdlog.h"
 
-/// <summary>
-/// Based on WebSocket++ Simple Broadcast Server.
-/// </summary>
+// Legacy code - Sight++ Gen 1
+
 class BroadcastServer
 {
 	std::set<websocketpp::connection_hdl, std::owner_less<websocketpp::connection_hdl>> connections_;
